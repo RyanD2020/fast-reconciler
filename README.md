@@ -71,11 +71,12 @@ python -m unittest discover -s tests -v
 
 ## Deploying to Databricks Apps
 
-`app.yaml` is a standard/minimal config. **I don't have a sample of your
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full runbook — prerequisites,
+CLI steps, and what's confirmed vs. assumed in `app.yaml` /
+`.streamlit/config.toml`. Short version: **I don't have a sample of your
 org's existing Databricks Apps setup to match conventions against** — check
 it against however other apps in your workspace are configured (service
-principal, secret scopes, env vars) before deploying. If you can share an
-existing app's `app.yaml` or repo, I'll align this one to match.
+principal, secret scopes, env vars) before deploying.
 
 ## Adding a new account (the reuse layer)
 

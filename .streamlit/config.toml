@@ -1,0 +1,11 @@
+# Server settings for running behind the Databricks Apps proxy.
+# enableCORS / enableXsrfProtection are set false because Databricks Apps
+# serves the app through its own domain rather than directly -- strict
+# CORS/XSRF checks can otherwise block the app from loading. This is a
+# commonly documented Databricks Apps + Streamlit requirement, not verified
+# against this specific workspace -- see DEPLOYMENT.md.
+[server]
+headless = true
+address = "0.0.0.0"
+enableCORS = false
+enableXsrfProtection = false

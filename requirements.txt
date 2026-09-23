@@ -1,3 +1,8 @@
+# Floor versions only -- this environment has no network access to verify
+# current PyPI releases. Before deploying, install these in your target
+# environment once and run `pip freeze > requirements.lock.txt`, then deploy
+# from the lock file so the tested versions are reproducible. See
+# DEPLOYMENT.md.
 streamlit>=1.37
 pandas>=2.0
 openpyxl>=3.1

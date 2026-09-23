@@ -1,15 +1,12 @@
 # Databricks Apps configuration.
 #
-# NOTE: I don't have a sample of your organization's existing Databricks Apps
-# config to match conventions against (see the README's "Open items" section)
-# -- this is a standard/minimal app.yaml. Check it against however other apps
-# in your workspace are configured before deploying, in case there's a house
-# convention (env vars, service principal, secret scopes, etc.) this should
-# follow instead.
-
-command: [
-  "streamlit", "run", "app.py",
-  "--server.port", "8501",
-  "--server.address", "0.0.0.0",
-  "--server.headless", "true"
-]
+# ASSUMPTION, NOT CONFIRMED AGAINST YOUR WORKSPACE: I have no network access
+# from this environment to test against a real Databricks Apps deployment,
+# and no sibling app.yaml from your org to match conventions against (see
+# DEPLOYMENT.md). This follows Databricks' general documented convention for
+# a Streamlit app: a minimal command with no hardcoded port/address (the
+# platform injects and proxies these), and CORS/XSRF relaxed in
+# .streamlit/config.toml (commonly required because Databricks Apps proxies
+# the app through its own domain). Confirm this against an existing app in
+# your workspace, or current Databricks documentation, before deploying.
+command: ["streamlit", "run", "app.py"]
