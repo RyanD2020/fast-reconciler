@@ -29,8 +29,8 @@ requirements.txt
 core/
   config.py                     AccountConfig / FlowCodeRule registry — the reuse layer (see below)
   schema.py                     Column-name resolution, incl. one still-open assumption (see below)
-  io_utils.py                   Loads a source from either an upload or a Databricks Volume path
-  ui.py                         Shared Streamlit widgets (file input, color-coded results table)
+  io_utils.py                   Loads a source from either an upload or a Databricks Volume path; lists sheet names for the picker
+  ui.py                         Shared Streamlit widgets (file input + sheet picker, color-coded results table)
   matching.py                   run_phase1 / run_phase2 (built); run_phase3 (stub)
   models.py                     DailyResult / Phase1Result / Phase2Result dataclasses
   export.py                     Excel export -- see "Excel export" below
@@ -41,6 +41,7 @@ tests/
   test_phase1_matching.py       Unit tests for run_phase1 (stdlib unittest, no extra deps)
   test_phase2_matching.py       Unit tests for run_phase2, incl. -466/-GDSCK_* Reference 7 split and manual review
   test_export.py                Unit tests for export_workbook (sheet names, content, status color-fill)
+  test_io_utils.py              Unit tests for list_sheet_names / load_tabular (multi-sheet workbook handling)
 sample_data/
   sample_cadency_export.csv     Synthetic data — NOT real transactions — covers Phase 1 + Phase 2 Flow Codes
   sample_sap_export.csv         Synthetic data — includes one intentional mismatch day
@@ -64,6 +65,20 @@ upload `sample_cadency_export.csv` and `sample_bank_export.csv`. You should
 see six `RECONCILED` Flow Codes, one `DOES NOT RECONCILE` Flow Code
 (`+GDSCK_S`, off by $10 — intentional), and `-495`/`+195` both flagged
 `MANUAL REVIEW` regardless of whether the amounts happen to match.
+
+## Loading multi-sheet workbooks
+
+Every file upload / Volume-path input (Cadency, SAP, bank) checks how many
+sheets the file has. A single-sheet file (or a `.csv`) loads with no extra
+step. A multi-sheet workbook — e.g. someone's own manual review file with
+several tabs — shows a "Which sheet is [source]?" dropdown instead of
+silently grabbing the first sheet. Per Sean (2026-09-23): live/production
+exports are expected to stay raw single-purpose files with minimal
+pre-manipulation, so this picker is mainly a safety net for exactly the
+case it was built for — someone uploading an already-organized review
+workbook and needing to point the tool at the right tab. Whatever sheet is
+selected still goes through the normal Phase 1 / Phase 2 filtering logic;
+nothing about this input path skips or trusts pre-filtered data.
 
 ## Excel export
 

@@ -10,8 +10,22 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from .io_utils import load_tabular
+from .io_utils import list_sheet_names, load_tabular
 from .models import ReconStatus
+
+
+def _pick_sheet(label: str, key: str, **source_kwargs) -> "int | str":
+    """If the given file has more than one sheet, shows a selectbox so the
+    user picks which one is {label} -- real-world workbooks (e.g. someone's
+    own manual review file) aren't guaranteed to put the needed data on the
+    first sheet. Returns the sheet name, or 0 for single-sheet/.csv files.
+    """
+    sheet_names = list_sheet_names(**source_kwargs)
+    if not sheet_names:
+        return 0
+    if len(sheet_names) == 1:
+        return sheet_names[0]
+    return st.selectbox(f"Which sheet is {label}?", sheet_names, key=f"{key}_sheet")
 
 
 def source_input(label: str, key: str) -> pd.DataFrame | None:
@@ -31,7 +45,8 @@ def source_input(label: str, key: str) -> pd.DataFrame | None:
         uploaded = st.file_uploader(f"Upload {label} (.csv or .xlsx)", key=f"{key}_upload")
         if uploaded is not None:
             try:
-                df = load_tabular(uploaded_file=uploaded)
+                sheet = _pick_sheet(label, key, uploaded_file=uploaded)
+                df = load_tabular(uploaded_file=uploaded, sheet_name=sheet)
             except Exception as e:
                 st.error(f"Could not read {label}: {e}")
     else:
@@ -42,7 +57,8 @@ def source_input(label: str, key: str) -> pd.DataFrame | None:
         )
         if path:
             try:
-                df = load_tabular(volume_path=path)
+                sheet = _pick_sheet(label, key, volume_path=path)
+                df = load_tabular(volume_path=path, sheet_name=sheet)
             except Exception as e:
                 st.error(f"Could not read {label}: {e}")
 
