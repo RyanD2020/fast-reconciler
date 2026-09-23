@@ -46,6 +46,7 @@ sample_data/
   sample_cadency_export.csv     Synthetic data — NOT real transactions — covers Phase 1 + Phase 2 Flow Codes
   sample_sap_export.csv         Synthetic data — includes one intentional mismatch day
   sample_bank_export.csv        Synthetic data — includes one intentional $10 mismatch (+GDSCK_S)
+  sample_multi_sheet_workbook.xlsx  Synthetic data — same Cadency/SAP rows, split into two named tabs ("Cadency match to SAP" / "SAP Match to Cadency") to test the sheet picker
 ```
 
 ## Running locally
@@ -79,6 +80,13 @@ case it was built for — someone uploading an already-organized review
 workbook and needing to point the tool at the right tab. Whatever sheet is
 selected still goes through the normal Phase 1 / Phase 2 filtering logic;
 nothing about this input path skips or trusts pre-filtered data.
+
+Try it against `sample_data/sample_multi_sheet_workbook.xlsx` — upload it
+into either the Cadency or SAP slot on the home page and you'll get the
+sheet picker with `Cadency match to SAP` / `SAP Match to Cadency` as
+options. `demo.html` has the same picker (upload it there in either the
+Phase 1 or Phase 2 tab to see it live in the browser mockup, no Streamlit
+needed).
 
 ## Excel export
 

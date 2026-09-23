@@ -59,6 +59,10 @@
   }
   .card h3 { margin: 0 0 6px; font-size: 15px; }
   .card .rowcount { color: #16a34a; font-size: 13px; font-weight: 600; }
+  .file-input { display: block; font-size: 12.5px; margin: 6px 0; }
+  .sheet-picker { margin: 4px 0; font-size: 13px; }
+  .sheet-picker select { padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 13px; }
+  .sheet-picker label { color: #555; }
   .run-btn {
     background: var(--accent); color: white; border: none; border-radius: 6px;
     padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; margin: 10px 0 20px;
@@ -95,7 +99,7 @@
 <body>
 
 <div class="banner">
-  UI PREVIEW — static HTML mockup, not the real app. Same rules and sample data as core/matching.py + sample_data/. "Export to Excel" here downloads a real .xlsx via a browser-side library (SheetJS, loaded from a CDN) purely for this demo — the real app's export in core/export.py runs server-side and needs no internet. Run the real app with <code>streamlit run app.py</code>.
+  UI PREVIEW — static HTML mockup, not the real app. Same rules and sample data as core/matching.py + sample_data/. Uploading your own .csv/.xlsx and "Export to Excel" both use a browser-side library (SheetJS, loaded from a CDN) purely for this demo — the real app's file loading (core/io_utils.py) and export (core/export.py) run server-side and need no internet. If you upload a workbook with more than one sheet, you'll get the same "which sheet?" dropdown as the real app. Run the real app with <code>streamlit run app.py</code>.
 </div>
 
 <div class="sidebar">
@@ -136,8 +140,18 @@
 
   <div class="panel active" id="panel-p1">
     <div class="cards">
-      <div class="card"><h3>Cadency export</h3><div class="rowcount" id="p1-cadency-count"></div></div>
-      <div class="card"><h3>SAP export</h3><div class="rowcount" id="p1-sap-count"></div></div>
+      <div class="card">
+        <h3>Cadency export</h3>
+        <input type="file" class="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event, 'p1-cadency')">
+        <div class="sheet-picker" id="p1-cadency-sheet-picker"></div>
+        <div class="rowcount" id="p1-cadency-count"></div>
+      </div>
+      <div class="card">
+        <h3>SAP export</h3>
+        <input type="file" class="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event, 'p1-sap')">
+        <div class="sheet-picker" id="p1-sap-sheet-picker"></div>
+        <div class="rowcount" id="p1-sap-count"></div>
+      </div>
     </div>
     <button class="run-btn" onclick="renderPhase1()">Run Phase 1 Reconciliation</button>
     <button class="export-btn" onclick="exportPhase1()">Download Excel export</button>
@@ -150,8 +164,18 @@
 
   <div class="panel" id="panel-p2">
     <div class="cards">
-      <div class="card"><h3>Cadency export</h3><div class="rowcount" id="p2-cadency-count"></div></div>
-      <div class="card"><h3>Treasury / bank export</h3><div class="rowcount" id="p2-bank-count"></div></div>
+      <div class="card">
+        <h3>Cadency export</h3>
+        <input type="file" class="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event, 'p2-cadency')">
+        <div class="sheet-picker" id="p2-cadency-sheet-picker"></div>
+        <div class="rowcount" id="p2-cadency-count"></div>
+      </div>
+      <div class="card">
+        <h3>Treasury / bank export</h3>
+        <input type="file" class="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event, 'p2-bank')">
+        <div class="sheet-picker" id="p2-bank-sheet-picker"></div>
+        <div class="rowcount" id="p2-bank-count"></div>
+      </div>
     </div>
     <button class="run-btn" onclick="renderPhase2()">Run Phase 2 Reconciliation</button>
     <button class="export-btn" onclick="exportPhase2()">Download Excel export</button>
@@ -205,10 +229,18 @@ const bank = [
   {flowCode:"+195", date:"2026-08-05", amount:500.00},
 ];
 
-document.getElementById("p1-cadency-count").textContent = `Loaded ${cadency.length} rows.`;
-document.getElementById("p1-sap-count").textContent = `Loaded ${sap.length} rows.`;
-document.getElementById("p2-cadency-count").textContent = `Loaded ${cadency.length} rows.`;
-document.getElementById("p2-bank-count").textContent = `Loaded ${bank.length} rows.`;
+// Each panel tracks its own "currently loaded" data, defaulting to the
+// embedded sample -- mirrors the real app, where Phase 1 and Phase 2 each
+// have their own independent Cadency upload.
+let activeCadencyP1 = cadency;
+let activeSapP1 = sap;
+let activeCadencyP2 = cadency;
+let activeBankP2 = bank;
+
+document.getElementById("p1-cadency-count").textContent = `Loaded ${cadency.length} rows (sample data).`;
+document.getElementById("p1-sap-count").textContent = `Loaded ${sap.length} rows (sample data).`;
+document.getElementById("p2-cadency-count").textContent = `Loaded ${cadency.length} rows (sample data).`;
+document.getElementById("p2-bank-count").textContent = `Loaded ${bank.length} rows (sample data).`;
 
 document.querySelectorAll(".tab").forEach(tab => {
   tab.addEventListener("click", () => {
@@ -235,8 +267,8 @@ const PHASE1_SAP_TEXT = ["Annuity Payment", "Death Claim Disbursement", "Write O
 let phase1State = null;
 
 function renderPhase1() {
-  const qCadency = cadency.filter(r => r.ref10 === "FAST" && PHASE1_TRANS_TYPES.includes(r.ref9));
-  const qSap = sap.filter(r => PHASE1_SAP_TEXT.includes(r.text));
+  const qCadency = activeCadencyP1.filter(r => r.ref10 === "FAST" && PHASE1_TRANS_TYPES.includes(r.ref9));
+  const qSap = activeSapP1.filter(r => PHASE1_SAP_TEXT.includes(r.text));
   const dates = [...new Set([...qCadency.map(r => r.postDate), ...qSap.map(r => r.date)])].sort();
 
   const tbody = document.querySelector("#p1-table tbody");
@@ -275,7 +307,7 @@ function renderPhase1() {
     ? `<span class="pill red">${nBad} day(s) do not reconcile</span> — click a row to see the qualifying detail behind it.`
     : `<span class="pill green">All days reconcile exactly</span>`;
 
-  phase1State = { results: resultsRows, qualifyingCadency: qCadency, qualifyingSap: qSap, rawCadency: cadency, rawSap: sap };
+  phase1State = { results: resultsRows, qualifyingCadency: qCadency, qualifyingSap: qSap, rawCadency: activeCadencyP1, rawSap: activeSapP1 };
 }
 
 // ---- Phase 2 ----
@@ -301,9 +333,9 @@ function renderPhase2() {
   const allQBank = [];
 
   FLOW_RULES.forEach(rule => {
-    let qCadency = cadency.filter(r => r.ref10 === rule.ref10 && r.ref9 === rule.transType);
+    let qCadency = activeCadencyP2.filter(r => r.ref10 === rule.ref10 && r.ref9 === rule.transType);
     if (rule.ref7Equals) qCadency = qCadency.filter(r => r.ref7 === rule.ref7Equals);
-    const qBank = bank.filter(r => r.flowCode === rule.flowCode);
+    const qBank = activeBankP2.filter(r => r.flowCode === rule.flowCode);
     const dateKey = rule.useEffectiveDate ? "effDate" : "postDate";
 
     qCadency.forEach(r => allQCadency.push({ ...r, flowCode: rule.flowCode }));
@@ -346,7 +378,7 @@ function renderPhase2() {
   if (!nBad && !nManual) parts.push(`<span class="pill green">All rows reconcile exactly</span>`);
   document.getElementById("p2-summary").innerHTML = parts.join(" ") + " — click a row to see the qualifying detail behind it.";
 
-  phase2State = { results: resultsRows, qualifyingCadency: allQCadency, qualifyingBank: allQBank, rawCadency: cadency, rawBank: bank };
+  phase2State = { results: resultsRows, qualifyingCadency: allQCadency, qualifyingBank: allQBank, rawCadency: activeCadencyP2, rawBank: activeBankP2 };
 }
 
 function miniTable(rows, cols) {
@@ -359,6 +391,112 @@ function miniTable(rows, cols) {
 function toggleDetail(id) {
   const el = document.getElementById(id);
   el.style.display = el.style.display === "none" ? "table-row" : "none";
+}
+
+// ---- File upload + sheet picker, mirroring core/io_utils.py + core/ui.py ----
+
+function excelDateToStr(v) {
+  if (v instanceof Date) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, "0");
+    const d = String(v.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof v === "string" && v.length >= 10) return v.slice(0, 10);
+  return v || "";
+}
+
+function mapCadencyRows(rawRows) {
+  return rawRows.map(r => ({
+    drcr: r["DR/CR"] || "",
+    type: r["Transaction Type"] || "",
+    amount: Number(r["Amount"]) || 0,
+    postDate: excelDateToStr(r["Post Date"]),
+    effDate: excelDateToStr(r["Effective Date"] || r["Post Date"]),
+    ref10: r["Reference 10"] || "",
+    ref9: String(r["Reference 9"] || r["TR No"] || ""),
+    ref7: String(r["Reference 7"] || ""),
+  }));
+}
+
+function mapSapRows(rawRows) {
+  return rawRows.map(r => ({
+    text: r["Text"] || "",
+    date: excelDateToStr(r["Document Date"]),
+    amount: Number(r["Amount"]) || 0,
+  }));
+}
+
+function mapBankRows(rawRows) {
+  return rawRows.map(r => ({
+    flowCode: r["Flow Code"] || "",
+    date: excelDateToStr(r["Date"]),
+    amount: Number(r["Amount"]) || 0,
+  }));
+}
+
+// One entry per upload slot: how to map its rows, where to put the result,
+// and what to re-run afterward -- same shape as the real app's per-source
+// inputs (Phase 1's Cadency/SAP, Phase 2's Cadency/Bank are independent).
+const SOURCE_CONFIG = {
+  "p1-cadency": { mapper: mapCadencyRows, apply: rows => { activeCadencyP1 = rows; renderPhase1(); } },
+  "p1-sap": { mapper: mapSapRows, apply: rows => { activeSapP1 = rows; renderPhase1(); } },
+  "p2-cadency": { mapper: mapCadencyRows, apply: rows => { activeCadencyP2 = rows; renderPhase2(); } },
+  "p2-bank": { mapper: mapBankRows, apply: rows => { activeBankP2 = rows; renderPhase2(); } },
+};
+
+function handleFileUpload(event, sourceKey) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const pickerEl = document.getElementById(`${sourceKey}-sheet-picker`);
+  pickerEl.innerHTML = "";
+
+  if (file.name.toLowerCase().endsWith(".csv")) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      if (typeof XLSX === "undefined") return alertNoXlsx();
+      const wb = XLSX.read(e.target.result, { type: "string" });
+      loadSheetIntoSource(wb, wb.SheetNames[0], sourceKey);
+    };
+    reader.readAsText(file);
+    return;
+  }
+
+  if (typeof XLSX === "undefined") return alertNoXlsx();
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(new Uint8Array(e.target.result), { type: "array", cellDates: true });
+    if (wb.SheetNames.length > 1) {
+      const label = document.createElement("label");
+      label.textContent = "Which sheet? ";
+      const select = document.createElement("select");
+      select.innerHTML = wb.SheetNames.map(n => `<option value="${n}">${n}</option>`).join("");
+      select.addEventListener("change", () => loadSheetIntoSource(wb, select.value, sourceKey));
+      label.appendChild(select);
+      pickerEl.appendChild(label);
+    }
+    loadSheetIntoSource(wb, wb.SheetNames[0], sourceKey);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function loadSheetIntoSource(wb, sheetName, sourceKey) {
+  const config = SOURCE_CONFIG[sourceKey];
+  const rawRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "", raw: true });
+  const rows = config.mapper(rawRows);
+  config.apply(rows);
+  document.getElementById(`${sourceKey}-count`).textContent =
+    `Loaded ${rows.length} rows from "${sheetName}".`;
+}
+
+function alertNoXlsx() {
+  alert(
+    "Couldn't load the Excel library (SheetJS) from its CDN, so this browser " +
+    "demo can't read the file right now -- likely no internet access or a " +
+    "network policy blocking cdn.jsdelivr.net. The real app's file loading " +
+    "(core/io_utils.py) runs server-side and doesn't need this."
+  );
 }
 
 function downloadWorkbook(sheets, filename) {
