@@ -1,0 +1,17 @@
+# Real business source documents added 2026-09-23 -- contain real production
+# financial data / internal business docs. Never push these.
+Accounting_Reconciliation_Business_Requirements.docx
+Cadency_Monthly_SAP_Trial_Balance_Reconciliation_Procedure.docx
+Cadency Export Guide.xlsx
+Cadency flow diagram.png
+July 2026 19803075.xlsx
+Acct 147 Rec January 2024.xlsx
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.vscode/

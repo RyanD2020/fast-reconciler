@@ -1,0 +1,15 @@
+# Databricks Apps configuration.
+#
+# NOTE: I don't have a sample of your organization's existing Databricks Apps
+# config to match conventions against (see the README's "Open items" section)
+# -- this is a standard/minimal app.yaml. Check it against however other apps
+# in your workspace are configured before deploying, in case there's a house
+# convention (env vars, service principal, secret scopes, etc.) this should
+# follow instead.
+
+command: [
+  "streamlit", "run", "app.py",
+  "--server.port", "8501",
+  "--server.address", "0.0.0.0",
+  "--server.headless", "true"
+]

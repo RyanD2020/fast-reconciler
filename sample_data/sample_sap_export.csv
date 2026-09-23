@@ -1,0 +1,9 @@
+Text,Document Date,Amount
+Annuity Payment,2026-08-03,1000.00
+Death Claim Disbursement,2026-08-03,250.00
+Premium Remittance - Overpayment Recoupment,2026-08-03,-75.00
+Treasury Journal Entry,2026-08-03,500.00
+Annuity Payment,2026-08-04,2000.00
+Write Off,2026-08-04,300.00
+Treasury Journal Entry,2026-08-04,150.00
+Annuity Payment,2026-08-05,950.00

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>FAST Clearing Account Reconciler — UI Preview</title>
+<style>
+  :root {
+    --navy: #0e1f36;
+    --navy-light: #16304f;
+    --accent: #2563eb;
+    --green-bg: #d4edda; --green-fg: #14532d;
+    --red-bg: #f8d7da; --red-fg: #7f1d1d;
+    --yellow-bg: #fff3cd; --yellow-fg: #664d03;
+    --border: #d8dee6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Source Sans Pro", -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #f5f7fa;
+    color: #1a1a1a;
+    display: flex;
+    min-height: 100vh;
+  }
+  .banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    background: #664d03; color: #fff3cd; font-size: 13px;
+    padding: 6px 16px; text-align: center;
+  }
+  .sidebar {
+    width: 300px; background: var(--navy); color: #e5e9f0;
+    padding: 56px 20px 20px; flex-shrink: 0;
+  }
+  .sidebar h2 { font-size: 15px; color: #9fb3d1; text-transform: uppercase; letter-spacing: .05em; margin: 24px 0 8px; }
+  .sidebar select {
+    width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #34507a;
+    background: var(--navy-light); color: white; font-size: 14px;
+  }
+  details.rules { background: var(--navy-light); border-radius: 8px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
+  details.rules summary { cursor: pointer; font-weight: 600; }
+  details.rules div.rule-row { padding: 4px 0; border-bottom: 1px solid #24446e; }
+  details.rules div.rule-row:last-child { border-bottom: none; }
+  .rule-code { font-family: monospace; color: #7dd3fc; }
+  main { flex: 1; padding: 56px 40px 40px; max-width: 1100px; }
+  h1 { margin-top: 0; }
+  .caption { color: #555; font-size: 14px; margin-top: -8px; }
+  .tabs { display: flex; gap: 4px; margin: 24px 0 0; border-bottom: 2px solid var(--border); }
+  .tab {
+    padding: 10px 18px; cursor: pointer; font-weight: 600; color: #666;
+    border-bottom: 3px solid transparent; user-select: none;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel { display: none; padding-top: 20px; }
+  .panel.active { display: block; }
+  .cards { display: flex; gap: 20px; margin-bottom: 20px; }
+  .card {
+    flex: 1; background: white; border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .card h3 { margin: 0 0 6px; font-size: 15px; }
+  .card .rowcount { color: #16a34a; font-size: 13px; font-weight: 600; }
+  .run-btn {
+    background: var(--accent); color: white; border: none; border-radius: 6px;
+    padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; margin: 10px 0 20px;
+  }
+  .run-btn:hover { background: #1d4ed8; }
+  table.results { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.results th { text-align: left; padding: 8px 10px; background: #eef1f5; border-bottom: 2px solid var(--border); }
+  table.results td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  tr.status-RECONCILED { background: var(--green-bg); }
+  tr.status-RECONCILED td.status { color: var(--green-fg); font-weight: 700; }
+  tr.status-DOES_NOT_RECONCILE { background: var(--red-bg); }
+  tr.status-DOES_NOT_RECONCILE td.status { color: var(--red-fg); font-weight: 700; }
+  tr.status-MANUAL_REVIEW { background: var(--yellow-bg); }
+  tr.status-MANUAL_REVIEW td.status { color: var(--yellow-fg); font-weight: 700; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { filter: brightness(0.96); }
+  .detail-row td { background: white !important; padding: 0; }
+  .detail-inner { padding: 10px 16px 16px 30px; }
+  .detail-inner table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+  .detail-inner th, .detail-inner td { padding: 4px 8px; border-bottom: 1px solid #eee; text-align: left; }
+  .detail-inner h4 { margin: 10px 0 2px; font-size: 12.5px; color: #555; text-transform: uppercase; letter-spacing: .03em; }
+  .summary-line { margin: 16px 0; font-size: 14px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; margin-right: 6px; }
+  .pill.green { background: var(--green-bg); color: var(--green-fg); }
+  .pill.red { background: var(--red-bg); color: var(--red-fg); }
+  .pill.yellow { background: var(--yellow-bg); color: var(--yellow-fg); }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  UI PREVIEW — static HTML mockup, not the real app. Same rules and sample data as core/matching.py + sample_data/. Run the real app with <code>streamlit run app.py</code>.
+</div>
+
+<div class="sidebar">
+  <div style="font-weight:700; font-size:16px;">FAST Clearing Account Reconciler</div>
+  <h2>Account</h2>
+  <select disabled>
+    <option>FAST Pension Annuity Clearing Account (19803075)</option>
+  </select>
+
+  <h2>Active Rules</h2>
+  <details class="rules" open>
+    <summary>Phase 1 — FAST vs. SAP</summary>
+    <div class="rule-row">Reference 10 = <span class="rule-code">FAST</span></div>
+    <div class="rule-row">Trans Type in <span class="rule-code">5801, 2105, DEDU, OVER, SJ90</span></div>
+    <div class="rule-row">SAP Text in <span class="rule-code">Annuity Payment, Death Claim Disbursement, Write Off, Premium Remittance - Overpayment Recoupment</span></div>
+  </details>
+  <details class="rules">
+    <summary>Phase 2 — Treasury Flow Codes</summary>
+    <div class="rule-row"><span class="rule-code">+301</span> → FAST/CHKD</div>
+    <div class="rule-row"><span class="rule-code">-466</span> → GDS/5801 (Effective Date; excl. Ref7 C/S/I)</div>
+    <div class="rule-row"><span class="rule-code">+168</span> → FAST/BRCR</div>
+    <div class="rule-row"><span class="rule-code">+GDSCK_C</span> → GDS/5801, Ref7=C</div>
+    <div class="rule-row"><span class="rule-code">+GDSCK_S</span> → GDS/5801, Ref7=S</div>
+    <div class="rule-row"><span class="rule-code">-GDSCK_I</span> → GDS/5801, Ref7=I</div>
+    <div class="rule-row"><span class="rule-code">-495</span> → FAST/WIRE (always Manual Review)</div>
+    <div class="rule-row"><span class="rule-code">+195</span> → FAST/INCO (always Manual Review)</div>
+  </details>
+</div>
+
+<main>
+  <h1>FAST Clearing Account Reconciler</h1>
+  <p class="caption">Phase 1 (FAST vs. SAP) and Phase 2 (Treasury Flow Codes) are functional in the real app. Phase 3 (Reclaims) is still stubbed.</p>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="p1">Phase 1 — FAST vs. SAP</div>
+    <div class="tab" data-tab="p2">Phase 2 — Treasury Match</div>
+  </div>
+
+  <div class="panel active" id="panel-p1">
+    <div class="cards">
+      <div class="card"><h3>Cadency export</h3><div class="rowcount" id="p1-cadency-count"></div></div>
+      <div class="card"><h3>SAP export</h3><div class="rowcount" id="p1-sap-count"></div></div>
+    </div>
+    <button class="run-btn" onclick="renderPhase1()">Run Phase 1 Reconciliation</button>
+    <div id="p1-summary" class="summary-line"></div>
+    <table class="results" id="p1-table">
+      <thead><tr><th>Date</th><th>Population</th><th>SAP</th><th>Cadency</th><th>Difference</th><th>Status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="panel" id="panel-p2">
+    <div class="cards">
+      <div class="card"><h3>Cadency export</h3><div class="rowcount" id="p2-cadency-count"></div></div>
+      <div class="card"><h3>Treasury / bank export</h3><div class="rowcount" id="p2-bank-count"></div></div>
+    </div>
+    <button class="run-btn" onclick="renderPhase2()">Run Phase 2 Reconciliation</button>
+    <div id="p2-summary" class="summary-line"></div>
+    <table class="results" id="p2-table">
+      <thead><tr><th>Date</th><th>Population</th><th>Bank</th><th>Cadency</th><th>Difference</th><th>Status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+// ---- Embedded sample data, exactly matching sample_data/*.csv ----
+const cadency = [
+  {drcr:"DR", type:"Benefit Payment", amount:1000.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"5801", ref7:""},
+  {drcr:"DR", type:"Interest on Benefits", amount:250.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"2105", ref7:""},
+  {drcr:"DR", type:"Overpayment Deduction", amount:-75.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"DEDU", ref7:""},
+  {drcr:"CR", type:"Check Deposit", amount:500.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"CHKD", ref7:""},
+  {drcr:"DR", type:"Benefit Payment", amount:2000.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"FAST", ref9:"5801", ref7:""},
+  {drcr:"DR", type:"Write Off", amount:300.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"FAST", ref9:"SJ90", ref7:""},
+  {drcr:"DR", type:"GDS EFT", amount:150.00, postDate:"2026-08-04", effDate:"2026-08-06", ref10:"GDS", ref9:"5801", ref7:""},
+  {drcr:"DR", type:"Benefit Payment", amount:900.00, postDate:"2026-08-05", effDate:"2026-08-05", ref10:"FAST", ref9:"5801", ref7:""},
+  {drcr:"CR", type:"GDS Check Cancelled", amount:120.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"GDS", ref9:"5801", ref7:"C"},
+  {drcr:"CR", type:"GDS Check Stopped", amount:-60.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"GDS", ref9:"5801", ref7:"S"},
+  {drcr:"DR", type:"GDS Check Issued", amount:-300.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"GDS", ref9:"5801", ref7:"I"},
+  {drcr:"CR", type:"EFT Return of Benefit Payment", amount:75.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"FAST", ref9:"BRCR", ref7:""},
+  {drcr:"DR", type:"Outgoing Wire", amount:-1000.00, postDate:"2026-08-05", effDate:"2026-08-05", ref10:"FAST", ref9:"WIRE", ref7:""},
+  {drcr:"CR", type:"Incoming Wire", amount:500.00, postDate:"2026-08-05", effDate:"2026-08-05", ref10:"FAST", ref9:"INCO", ref7:""},
+];
+
+const sap = [
+  {text:"Annuity Payment", date:"2026-08-03", amount:1000.00},
+  {text:"Death Claim Disbursement", date:"2026-08-03", amount:250.00},
+  {text:"Premium Remittance - Overpayment Recoupment", date:"2026-08-03", amount:-75.00},
+  {text:"Treasury Journal Entry", date:"2026-08-03", amount:500.00},
+  {text:"Annuity Payment", date:"2026-08-04", amount:2000.00},
+  {text:"Write Off", date:"2026-08-04", amount:300.00},
+  {text:"Treasury Journal Entry", date:"2026-08-04", amount:150.00},
+  {text:"Annuity Payment", date:"2026-08-05", amount:950.00},
+];
+
+const bank = [
+  {flowCode:"+301", date:"2026-08-03", amount:500.00},
+  {flowCode:"-466", date:"2026-08-06", amount:150.00},
+  {flowCode:"+GDSCK_C", date:"2026-08-03", amount:120.00},
+  {flowCode:"+GDSCK_S", date:"2026-08-04", amount:-50.00},
+  {flowCode:"-GDSCK_I", date:"2026-08-04", amount:-300.00},
+  {flowCode:"+168", date:"2026-08-04", amount:75.00},
+  {flowCode:"-495", date:"2026-08-05", amount:-1000.00},
+  {flowCode:"+195", date:"2026-08-05", amount:500.00},
+];
+
+document.getElementById("p1-cadency-count").textContent = `Loaded ${cadency.length} rows.`;
+document.getElementById("p1-sap-count").textContent = `Loaded ${sap.length} rows.`;
+document.getElementById("p2-cadency-count").textContent = `Loaded ${cadency.length} rows.`;
+document.getElementById("p2-bank-count").textContent = `Loaded ${bank.length} rows.`;
+
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+  });
+});
+
+function round2(n) { return Math.round(n * 100) / 100; }
+function sum(rows, key) { return round2(rows.reduce((s, r) => s + r[key], 0)); }
+function groupByDate(rows, dateKey) {
+  const groups = {};
+  rows.forEach(r => { (groups[r[dateKey]] = groups[r[dateKey]] || []).push(r); });
+  return groups;
+}
+function statusClass(s) { return "status-" + s.replace(/ /g, "_"); }
+
+// ---- Phase 1 ----
+const PHASE1_TRANS_TYPES = ["5801", "2105", "DEDU", "OVER", "SJ90"];
+const PHASE1_SAP_TEXT = ["Annuity Payment", "Death Claim Disbursement", "Write Off", "Premium Remittance - Overpayment Recoupment"];
+
+function renderPhase1() {
+  const qCadency = cadency.filter(r => r.ref10 === "FAST" && PHASE1_TRANS_TYPES.includes(r.ref9));
+  const qSap = sap.filter(r => PHASE1_SAP_TEXT.includes(r.text));
+  const dates = [...new Set([...qCadency.map(r => r.postDate), ...qSap.map(r => r.date)])].sort();
+
+  const tbody = document.querySelector("#p1-table tbody");
+  tbody.innerHTML = "";
+  let nBad = 0;
+  dates.forEach((date, i) => {
+    const cRows = qCadency.filter(r => r.postDate === date);
+    const sRows = qSap.filter(r => r.date === date);
+    const cTotal = sum(cRows, "amount");
+    const sTotal = sum(sRows, "amount");
+    const diff = round2(sTotal - cTotal);
+    const status = diff === 0 ? "RECONCILED" : "DOES NOT RECONCILE";
+    if (status !== "RECONCILED") nBad++;
+
+    const tr = document.createElement("tr");
+    tr.className = `clickable ${statusClass(status)}`;
+    tr.innerHTML = `<td>${date}</td><td>Phase 1 - FAST vs SAP</td><td>${sTotal.toFixed(2)}</td><td>${cTotal.toFixed(2)}</td><td>${diff.toFixed(2)}</td><td class="status">${status}</td>`;
+    const detailId = `p1-detail-${i}`;
+    tr.addEventListener("click", () => toggleDetail(detailId));
+    tbody.appendChild(tr);
+
+    const dRow = document.createElement("tr");
+    dRow.className = "detail-row";
+    dRow.id = detailId;
+    dRow.style.display = "none";
+    dRow.innerHTML = `<td colspan="6"><div class="detail-inner">
+      <h4>Qualifying SAP detail</h4>${miniTable(sRows, ["text","date","amount"])}
+      <h4>Qualifying Cadency detail</h4>${miniTable(cRows, ["type","postDate","ref9","amount"])}
+    </div></td>`;
+    tbody.appendChild(dRow);
+  });
+
+  document.getElementById("p1-summary").innerHTML = nBad
+    ? `<span class="pill red">${nBad} day(s) do not reconcile</span> — click a row to see the qualifying detail behind it.`
+    : `<span class="pill green">All days reconcile exactly</span>`;
+}
+
+// ---- Phase 2 ----
+const FLOW_RULES = [
+  {flowCode:"+301", ref10:"FAST", transType:"CHKD"},
+  {flowCode:"-466", ref10:"GDS", transType:"5801", useEffectiveDate:true, ref7NotIn:["C","S","I"]},
+  {flowCode:"+168", ref10:"FAST", transType:"BRCR"},
+  {flowCode:"+GDSCK_C", ref10:"GDS", transType:"5801", ref7Equals:"C"},
+  {flowCode:"+GDSCK_S", ref10:"GDS", transType:"5801", ref7Equals:"S"},
+  {flowCode:"-GDSCK_I", ref10:"GDS", transType:"5801", ref7Equals:"I"},
+  {flowCode:"-495", ref10:"FAST", transType:"WIRE", manualReview:true},
+  {flowCode:"+195", ref10:"FAST", transType:"INCO", manualReview:true},
+];
+
+function renderPhase2() {
+  const tbody = document.querySelector("#p2-table tbody");
+  tbody.innerHTML = "";
+  let nBad = 0, nManual = 0, rowIdx = 0;
+
+  FLOW_RULES.forEach(rule => {
+    let qCadency = cadency.filter(r => r.ref10 === rule.ref10 && r.ref9 === rule.transType);
+    if (rule.ref7Equals) qCadency = qCadency.filter(r => r.ref7 === rule.ref7Equals);
+    if (rule.ref7NotIn) qCadency = qCadency.filter(r => !rule.ref7NotIn.includes(r.ref7));
+    const qBank = bank.filter(r => r.flowCode === rule.flowCode);
+    const dateKey = rule.useEffectiveDate ? "effDate" : "postDate";
+
+    const dates = [...new Set([...qCadency.map(r => r[dateKey]), ...qBank.map(r => r.date)])].sort();
+    dates.forEach(date => {
+      const cRows = qCadency.filter(r => r[dateKey] === date);
+      const bRows = qBank.filter(r => r.date === date);
+      const cTotal = sum(cRows, "amount");
+      const bTotal = sum(bRows, "amount");
+      const diff = round2(bTotal - cTotal);
+      let status = rule.manualReview ? "MANUAL REVIEW" : (diff === 0 ? "RECONCILED" : "DOES NOT RECONCILE");
+      if (status === "DOES NOT RECONCILE") nBad++;
+      if (status === "MANUAL REVIEW") nManual++;
+
+      const tr = document.createElement("tr");
+      tr.className = `clickable ${statusClass(status)}`;
+      tr.innerHTML = `<td>${date}</td><td>Phase 2 - ${rule.flowCode}</td><td>${bTotal.toFixed(2)}</td><td>${cTotal.toFixed(2)}</td><td>${diff.toFixed(2)}</td><td class="status">${status}</td>`;
+      const detailId = `p2-detail-${rowIdx++}`;
+      tr.addEventListener("click", () => toggleDetail(detailId));
+      tbody.appendChild(tr);
+
+      const dRow = document.createElement("tr");
+      dRow.className = "detail-row";
+      dRow.id = detailId;
+      dRow.style.display = "none";
+      dRow.innerHTML = `<td colspan="6"><div class="detail-inner">
+        <h4>Qualifying bank detail</h4>${miniTable(bRows, ["flowCode","date","amount"])}
+        <h4>Qualifying Cadency detail</h4>${miniTable(cRows, ["type","postDate","effDate","ref9","ref7","amount"])}
+      </div></td>`;
+      tbody.appendChild(dRow);
+    });
+  });
+
+  const parts = [];
+  if (nBad) parts.push(`<span class="pill red">${nBad} row(s) do not reconcile</span>`);
+  if (nManual) parts.push(`<span class="pill yellow">${nManual} row(s) manual review</span>`);
+  if (!nBad && !nManual) parts.push(`<span class="pill green">All rows reconcile exactly</span>`);
+  document.getElementById("p2-summary").innerHTML = parts.join(" ") + " — click a row to see the qualifying detail behind it.";
+}
+
+function miniTable(rows, cols) {
+  if (!rows.length) return "<div style='color:#999; font-size:12px;'>none</div>";
+  const head = "<tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr>";
+  const body = rows.map(r => "<tr>" + cols.map(c => `<td>${typeof r[c] === "number" ? r[c].toFixed(2) : (r[c] || "")}</td>`).join("") + "</tr>").join("");
+  return `<table>${head}${body}</table>`;
+}
+
+function toggleDetail(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === "none" ? "table-row" : "none";
+}
+
+// Auto-run both on load so the preview isn't empty
+renderPhase1();
+renderPhase2();
+</script>
+</body>
+</html>
