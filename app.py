@@ -13,6 +13,7 @@ from __future__ import annotations
 import streamlit as st
 
 from core.config import ACCOUNTS, get_account
+from core.export import export_workbook
 from core.matching import run_phase1
 from core.ui import render_results, source_input
 
@@ -58,11 +59,28 @@ if st.button("Run Phase 1 Reconciliation", type="primary", disabled=not ready):
         st.error(f"Phase 1 could not run: {e}")
     else:
         st.subheader("Phase 1 Results - FAST vs. SAP")
-        render_results(result.as_dataframe())
+        results_df = result.as_dataframe()
+        render_results(results_df)
 
         with st.expander("Qualifying SAP detail (drill-down)"):
             st.dataframe(result.sap_detail, use_container_width=True)
         with st.expander("Qualifying Cadency detail (drill-down)"):
             st.dataframe(result.cadency_detail, use_container_width=True)
+
+        excel_bytes = export_workbook(
+            [
+                ("Phase 1 Results", results_df),
+                ("Cadency - Phase 1 Qualifying", result.cadency_detail),
+                ("SAP - Phase 1 Qualifying", result.sap_detail),
+                ("Cadency - Raw", cadency_df),
+                ("SAP - Raw", sap_df),
+            ]
+        )
+        st.download_button(
+            "Download Excel export",
+            data=excel_bytes,
+            file_name=f"phase1_reconciliation_{account.account_number}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 elif not ready:
     st.info("Load both a Cadency export and a SAP export above, then run the reconciliation.")

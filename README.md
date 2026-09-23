@@ -33,12 +33,14 @@ core/
   ui.py                         Shared Streamlit widgets (file input, color-coded results table)
   matching.py                   run_phase1 / run_phase2 (built); run_phase3 (stub)
   models.py                     DailyResult / Phase1Result / Phase2Result dataclasses
+  export.py                     Excel export -- see "Excel export" below
 pages/
   1_Phase_2_Treasury_Match.py   Built — Treasury/bank Flow Code matching
   2_Phase_3_Reclaims.py         Stub page
 tests/
   test_phase1_matching.py       Unit tests for run_phase1 (stdlib unittest, no extra deps)
   test_phase2_matching.py       Unit tests for run_phase2, incl. -466/-GDSCK_* Reference 7 split and manual review
+  test_export.py                Unit tests for export_workbook (sheet names, content, status color-fill)
 sample_data/
   sample_cadency_export.csv     Synthetic data — NOT real transactions — covers Phase 1 + Phase 2 Flow Codes
   sample_sap_export.csv         Synthetic data — includes one intentional mismatch day
@@ -62,6 +64,23 @@ upload `sample_cadency_export.csv` and `sample_bank_export.csv`. You should
 see six `RECONCILED` Flow Codes, one `DOES NOT RECONCILE` Flow Code
 (`+GDSCK_S`, off by $10 — intentional), and `-495`/`+195` both flagged
 `MANUAL REVIEW` regardless of whether the amounts happen to match.
+
+## Excel export
+
+Each phase's page has a **Download Excel export** button (`core/export.py`)
+that packages the run into a single `.xlsx`, shaped to match the workbook
+Sean already builds by hand for his monthly review — the intent is that
+this can slot into his existing process rather than replace it with
+something unfamiliar:
+
+1. **Results** — the daily/per-Flow-Code compare, color-coded
+   RECONCILED/DOES NOT RECONCILE/MANUAL REVIEW. This is the actual
+   improvement over the manual version: an automated pass/fail instead of
+   eyeballing two totals.
+2. **Cadency - Phase N Qualifying** / **SAP or Bank - Phase N Qualifying** —
+   the same filtered tabs Sean's sheet already has (his Tab 1 / Tab 2).
+3. **Cadency - Raw** / **SAP or Bank - Raw** — the source file exactly as
+   uploaded, unfiltered (his Tab 3), for backup/reference.
 
 ## Running the tests
 

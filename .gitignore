@@ -1,11 +1,17 @@
-# Real business source documents added 2026-09-23 -- contain real production
-# financial data / internal business docs. Never push these.
+# Real business source documents -- contain real production financial data
+# / internal business docs. Never push these.
 Accounting_Reconciliation_Business_Requirements.docx
 Cadency_Monthly_SAP_Trial_Balance_Reconciliation_Procedure.docx
 Cadency Export Guide.xlsx
 Cadency flow diagram.png
 July 2026 19803075.xlsx
 Acct 147 Rec January 2024.xlsx
+IA Accting - Phase 1 Data.xlsx
+
+# Safety net: any other real export/workbook dropped at the project root.
+# Synthetic demo data belongs in sample_data/ as .csv, not here.
+/*.xlsx
+/*.docx
 
 # Python
 __pycache__/

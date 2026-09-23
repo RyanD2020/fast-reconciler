@@ -64,6 +64,11 @@
     padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; margin: 10px 0 20px;
   }
   .run-btn:hover { background: #1d4ed8; }
+  .export-btn {
+    background: white; color: var(--accent); border: 1px solid var(--accent); border-radius: 6px;
+    padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; margin: 10px 0 20px 10px;
+  }
+  .export-btn:hover { background: #eff6ff; }
   table.results { width: 100%; border-collapse: collapse; font-size: 14px; }
   table.results th { text-align: left; padding: 8px 10px; background: #eef1f5; border-bottom: 2px solid var(--border); }
   table.results td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
@@ -90,7 +95,7 @@
 <body>
 
 <div class="banner">
-  UI PREVIEW — static HTML mockup, not the real app. Same rules and sample data as core/matching.py + sample_data/. Run the real app with <code>streamlit run app.py</code>.
+  UI PREVIEW — static HTML mockup, not the real app. Same rules and sample data as core/matching.py + sample_data/. "Export to Excel" here downloads a real .xlsx via a browser-side library (SheetJS, loaded from a CDN) purely for this demo — the real app's export in core/export.py runs server-side and needs no internet. Run the real app with <code>streamlit run app.py</code>.
 </div>
 
 <div class="sidebar">
@@ -135,6 +140,7 @@
       <div class="card"><h3>SAP export</h3><div class="rowcount" id="p1-sap-count"></div></div>
     </div>
     <button class="run-btn" onclick="renderPhase1()">Run Phase 1 Reconciliation</button>
+    <button class="export-btn" onclick="exportPhase1()">Download Excel export</button>
     <div id="p1-summary" class="summary-line"></div>
     <table class="results" id="p1-table">
       <thead><tr><th>Date</th><th>Population</th><th>SAP</th><th>Cadency</th><th>Difference</th><th>Status</th></tr></thead>
@@ -148,6 +154,7 @@
       <div class="card"><h3>Treasury / bank export</h3><div class="rowcount" id="p2-bank-count"></div></div>
     </div>
     <button class="run-btn" onclick="renderPhase2()">Run Phase 2 Reconciliation</button>
+    <button class="export-btn" onclick="exportPhase2()">Download Excel export</button>
     <div id="p2-summary" class="summary-line"></div>
     <table class="results" id="p2-table">
       <thead><tr><th>Date</th><th>Population</th><th>Bank</th><th>Cadency</th><th>Difference</th><th>Status</th></tr></thead>
@@ -156,6 +163,7 @@
   </div>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 // ---- Embedded sample data, exactly matching sample_data/*.csv ----
 const cadency = [
@@ -224,6 +232,8 @@ function statusClass(s) { return "status-" + s.replace(/ /g, "_"); }
 const PHASE1_TRANS_TYPES = ["5801", "2105", "DEDU", "OVER", "SJ90"];
 const PHASE1_SAP_TEXT = ["Annuity Payment", "Death Claim Disbursement", "Write Off", "Premium Remittance - Overpayment Recoupment"];
 
+let phase1State = null;
+
 function renderPhase1() {
   const qCadency = cadency.filter(r => r.ref10 === "FAST" && PHASE1_TRANS_TYPES.includes(r.ref9));
   const qSap = sap.filter(r => PHASE1_SAP_TEXT.includes(r.text));
@@ -232,6 +242,7 @@ function renderPhase1() {
   const tbody = document.querySelector("#p1-table tbody");
   tbody.innerHTML = "";
   let nBad = 0;
+  const resultsRows = [];
   dates.forEach((date, i) => {
     const cRows = qCadency.filter(r => r.postDate === date);
     const sRows = qSap.filter(r => r.date === date);
@@ -240,6 +251,7 @@ function renderPhase1() {
     const diff = round2(sTotal - cTotal);
     const status = diff === 0 ? "RECONCILED" : "DOES NOT RECONCILE";
     if (status !== "RECONCILED") nBad++;
+    resultsRows.push({ Date: date, Population: "Phase 1 - FAST vs SAP", SAP: sTotal, Cadency: cTotal, Difference: diff, Status: status });
 
     const tr = document.createElement("tr");
     tr.className = `clickable ${statusClass(status)}`;
@@ -262,6 +274,8 @@ function renderPhase1() {
   document.getElementById("p1-summary").innerHTML = nBad
     ? `<span class="pill red">${nBad} day(s) do not reconcile</span> — click a row to see the qualifying detail behind it.`
     : `<span class="pill green">All days reconcile exactly</span>`;
+
+  phase1State = { results: resultsRows, qualifyingCadency: qCadency, qualifyingSap: qSap, rawCadency: cadency, rawSap: sap };
 }
 
 // ---- Phase 2 ----
@@ -276,10 +290,15 @@ const FLOW_RULES = [
   {flowCode:"+195", ref10:"FAST", transType:"INCO", manualReview:true},
 ];
 
+let phase2State = null;
+
 function renderPhase2() {
   const tbody = document.querySelector("#p2-table tbody");
   tbody.innerHTML = "";
   let nBad = 0, nManual = 0, rowIdx = 0;
+  const resultsRows = [];
+  const allQCadency = [];
+  const allQBank = [];
 
   FLOW_RULES.forEach(rule => {
     let qCadency = cadency.filter(r => r.ref10 === rule.ref10 && r.ref9 === rule.transType);
@@ -287,6 +306,9 @@ function renderPhase2() {
     if (rule.ref7NotIn) qCadency = qCadency.filter(r => !rule.ref7NotIn.includes(r.ref7));
     const qBank = bank.filter(r => r.flowCode === rule.flowCode);
     const dateKey = rule.useEffectiveDate ? "effDate" : "postDate";
+
+    qCadency.forEach(r => allQCadency.push({ ...r, flowCode: rule.flowCode }));
+    qBank.forEach(r => allQBank.push(r));
 
     const dates = [...new Set([...qCadency.map(r => r[dateKey]), ...qBank.map(r => r.date)])].sort();
     dates.forEach(date => {
@@ -298,6 +320,7 @@ function renderPhase2() {
       let status = rule.manualReview ? "MANUAL REVIEW" : (diff === 0 ? "RECONCILED" : "DOES NOT RECONCILE");
       if (status === "DOES NOT RECONCILE") nBad++;
       if (status === "MANUAL REVIEW") nManual++;
+      resultsRows.push({ Date: date, Population: `Phase 2 - ${rule.flowCode}`, Bank: bTotal, Cadency: cTotal, Difference: diff, Status: status });
 
       const tr = document.createElement("tr");
       tr.className = `clickable ${statusClass(status)}`;
@@ -323,6 +346,8 @@ function renderPhase2() {
   if (nManual) parts.push(`<span class="pill yellow">${nManual} row(s) manual review</span>`);
   if (!nBad && !nManual) parts.push(`<span class="pill green">All rows reconcile exactly</span>`);
   document.getElementById("p2-summary").innerHTML = parts.join(" ") + " — click a row to see the qualifying detail behind it.";
+
+  phase2State = { results: resultsRows, qualifyingCadency: allQCadency, qualifyingBank: allQBank, rawCadency: cadency, rawBank: bank };
 }
 
 function miniTable(rows, cols) {
@@ -335,6 +360,51 @@ function miniTable(rows, cols) {
 function toggleDetail(id) {
   const el = document.getElementById(id);
   el.style.display = el.style.display === "none" ? "table-row" : "none";
+}
+
+function downloadWorkbook(sheets, filename) {
+  if (typeof XLSX === "undefined") {
+    alert(
+      "Couldn't load the Excel library (SheetJS) from its CDN, so this browser " +
+      "demo can't build a download right now -- likely no internet access or a " +
+      "network policy blocking cdn.jsdelivr.net. The real app's export " +
+      "(core/export.py) runs server-side and doesn't need this."
+    );
+    return;
+  }
+  const wb = XLSX.utils.book_new();
+  sheets.forEach(([name, rows]) => {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name.slice(0, 31));
+  });
+  XLSX.writeFile(wb, filename);
+}
+
+function exportPhase1() {
+  if (!phase1State) { alert("Run Phase 1 first."); return; }
+  downloadWorkbook(
+    [
+      ["Phase 1 Results", phase1State.results],
+      ["Cadency - Phase 1 Qualifying", phase1State.qualifyingCadency],
+      ["SAP - Phase 1 Qualifying", phase1State.qualifyingSap],
+      ["Cadency - Raw", phase1State.rawCadency],
+      ["SAP - Raw", phase1State.rawSap],
+    ],
+    "phase1_reconciliation_demo.xlsx"
+  );
+}
+
+function exportPhase2() {
+  if (!phase2State) { alert("Run Phase 2 first."); return; }
+  downloadWorkbook(
+    [
+      ["Phase 2 Results", phase2State.results],
+      ["Cadency - Phase 2 Qualifying", phase2State.qualifyingCadency],
+      ["Bank - Phase 2 Qualifying", phase2State.qualifyingBank],
+      ["Cadency - Raw", phase2State.rawCadency],
+      ["Bank - Raw", phase2State.rawBank],
+    ],
+    "phase2_reconciliation_demo.xlsx"
+  );
 }
 
 // Auto-run both on load so the preview isn't empty

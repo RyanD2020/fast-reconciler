@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from core.config import ACCOUNTS
+from core.export import export_workbook
 from core.matching import run_phase2
 from core.ui import render_results, source_input
 
@@ -56,6 +57,23 @@ if st.button("Run Phase 2 Reconciliation", type="primary", disabled=not ready):
             st.dataframe(result.bank_detail, use_container_width=True)
         with st.expander("Qualifying Cadency detail (drill-down)"):
             st.dataframe(result.cadency_detail, use_container_width=True)
+
+        if not results_df.empty:
+            excel_bytes = export_workbook(
+                [
+                    ("Phase 2 Results", results_df),
+                    ("Cadency - Phase 2 Qualifying", result.cadency_detail),
+                    ("Bank - Phase 2 Qualifying", result.bank_detail),
+                    ("Cadency - Raw", cadency_df),
+                    ("Bank - Raw", bank_df),
+                ]
+            )
+            st.download_button(
+                "Download Excel export",
+                data=excel_bytes,
+                file_name=f"phase2_reconciliation_{account.account_number}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
 elif not ready:
     st.info(
         "Load both a Cadency export and a Treasury/bank statement export above, "
