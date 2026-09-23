@@ -63,7 +63,7 @@ class TestPhase2Matching(unittest.TestCase):
             {
                 "Reference 10": ["GDS"],
                 "Reference 9": ["5801"],
-                "Reference 7": [""],
+                "Reference 7": ["E"],
                 "Amount": [150.0],
                 "Post Date": [datetime(2026, 8, 4)],
                 "Effective Date": [datetime(2026, 8, 6)],
@@ -78,14 +78,14 @@ class TestPhase2Matching(unittest.TestCase):
         self.assertEqual(day.status, ReconStatus.RECONCILED)
 
     def test_gdsck_reference7_splits_from_466(self):
-        # Two GDS/5801 rows on the same day: one plain EFT (-466), one
-        # cancelled check (Reference 7 = C, +GDSCK_C). They must not be
-        # summed together under either Flow Code.
+        # Two GDS/5801 rows on the same day: one EFT (Reference 7 = E,
+        # -466), one cancelled check (Reference 7 = C, +GDSCK_C). They must
+        # not be summed together under either Flow Code.
         cadency = pd.DataFrame(
             {
                 "Reference 10": ["GDS", "GDS"],
                 "Reference 9": ["5801", "5801"],
-                "Reference 7": ["", "C"],
+                "Reference 7": ["E", "C"],
                 "Amount": [150.0, 120.0],
                 "Post Date": [datetime(2026, 8, 3)] * 2,
                 "Effective Date": [datetime(2026, 8, 3)] * 2,
@@ -105,6 +105,28 @@ class TestPhase2Matching(unittest.TestCase):
         self.assertEqual(by_flow_code["Phase 2 - +GDSCK_C"].source_b_total, 120.0)
         self.assertEqual(by_flow_code["Phase 2 - -466"].status, ReconStatus.RECONCILED)
         self.assertEqual(by_flow_code["Phase 2 - +GDSCK_C"].status, ReconStatus.RECONCILED)
+
+    def test_466_requires_reference7_e_not_just_absence_of_check_codes(self):
+        # Per Sean (2026-09-23): EFT is positively tagged Reference 7 = E,
+        # not "anything that isn't a GDSCK check code." A blank/unknown
+        # Reference 7 on a GDS/5801 row must NOT be picked up by -466.
+        cadency = pd.DataFrame(
+            {
+                "Reference 10": ["GDS"],
+                "Reference 9": ["5801"],
+                "Reference 7": [""],
+                "Amount": [150.0],
+                "Post Date": [datetime(2026, 8, 3)],
+                "Effective Date": [datetime(2026, 8, 3)],
+            }
+        )
+        bank = pd.DataFrame({"Flow Code": ["-466"], "Date": [datetime(2026, 8, 3)], "Amount": [150.0]})
+        result = run_phase2(cadency, bank, self.account)
+        day = result.daily_results[0]
+        # The bank side still has the $150, but nothing on the Cadency side
+        # qualifies (blank Reference 7 != "E"), so it shows as a mismatch.
+        self.assertEqual(day.source_b_total, 0.0)
+        self.assertEqual(day.status, ReconStatus.DOES_NOT_RECONCILE)
 
     def test_495_always_manual_review_even_when_amounts_match(self):
         cadency = pd.DataFrame(

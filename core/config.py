@@ -28,11 +28,11 @@ class FlowCodeRule:
     against legacy Accounts 187/147) are still captured as data only --
     run_phase3 is a stub.
 
-    reference7_equals / reference7_not_in exist because GDS/5801 activity
-    covers more than one Flow Code: Reference 7 = C/S/I identifies GDS
-    check cancel/stop/issue sub-status (the GDSCK_* codes), while -466 (the
-    outgoing EFT population) is everything else in GDS/5801 -- i.e. GDS/5801
-    rows whose Reference 7 is NOT one of the check sub-statuses.
+    reference7_equals exists because GDS/5801 activity covers more than one
+    Flow Code, each identified by its own Reference 7 tag (confirmed with
+    Sean, 2026-09-23): "C"/"S"/"I" for the three GDSCK check sub-statuses,
+    and "E" for EFT activity (-466). Each is a positive match on its own
+    value -- there's no "everything else" rule.
     """
 
     flow_code: str
@@ -42,7 +42,6 @@ class FlowCodeRule:
     use_effective_date: bool = False
     manual_review: bool = False
     reference7_equals: str | None = None
-    reference7_not_in: tuple[str, ...] = ()
     notes: str = ""
 
 
@@ -81,10 +80,9 @@ ACCOUNTS: dict[str, AccountConfig] = {
         display_name="FAST Pension Annuity Clearing Account (19803075)",
         flow_code_rules=(
             FlowCodeRule("+301", "FAST", "CHKD", notes="Check deposits"),
-            FlowCodeRule("-466", "GDS", "5801", use_effective_date=True,
-                         reference7_not_in=("C", "S", "I"),
+            FlowCodeRule("-466", "GDS", "5801", use_effective_date=True, reference7_equals="E",
                          notes="Outgoing EFT - use Effective Date, not Post Date (settlement delay); "
-                               "GDS/5801 minus the GDSCK check sub-statuses"),
+                               "EFT activity is tagged Reference 7 = E"),
             FlowCodeRule("+168", "FAST", "BRCR", notes="Bank return credits / returned EFT"),
             FlowCodeRule("+GDSCK_C", "GDS", "5801", reference7_equals="C", notes="Cancelled GDS check"),
             FlowCodeRule("+GDSCK_S", "GDS", "5801", reference7_equals="S", notes="Stopped GDS check"),

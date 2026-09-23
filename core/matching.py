@@ -130,8 +130,6 @@ def run_phase2(
         )
         if rule.reference7_equals is not None:
             mask &= cadency_df["Reference 7"] == rule.reference7_equals
-        if rule.reference7_not_in:
-            mask &= ~cadency_df["Reference 7"].isin(rule.reference7_not_in)
 
         cadency_qualifying = cadency_df[mask].copy()
         cadency_qualifying["Flow Code"] = rule.flow_code

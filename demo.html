@@ -115,7 +115,7 @@
   <details class="rules">
     <summary>Phase 2 — Treasury Flow Codes</summary>
     <div class="rule-row"><span class="rule-code">+301</span> → FAST/CHKD</div>
-    <div class="rule-row"><span class="rule-code">-466</span> → GDS/5801 (Effective Date; excl. Ref7 C/S/I)</div>
+    <div class="rule-row"><span class="rule-code">-466</span> → GDS/5801, Ref7=E (Effective Date)</div>
     <div class="rule-row"><span class="rule-code">+168</span> → FAST/BRCR</div>
     <div class="rule-row"><span class="rule-code">+GDSCK_C</span> → GDS/5801, Ref7=C</div>
     <div class="rule-row"><span class="rule-code">+GDSCK_S</span> → GDS/5801, Ref7=S</div>
@@ -173,7 +173,7 @@ const cadency = [
   {drcr:"CR", type:"Check Deposit", amount:500.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"CHKD", ref7:""},
   {drcr:"DR", type:"Benefit Payment", amount:2000.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"FAST", ref9:"5801", ref7:""},
   {drcr:"DR", type:"Write Off", amount:300.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"FAST", ref9:"SJ90", ref7:""},
-  {drcr:"DR", type:"GDS EFT", amount:150.00, postDate:"2026-08-04", effDate:"2026-08-06", ref10:"GDS", ref9:"5801", ref7:""},
+  {drcr:"DR", type:"GDS EFT", amount:150.00, postDate:"2026-08-04", effDate:"2026-08-06", ref10:"GDS", ref9:"5801", ref7:"E"},
   {drcr:"DR", type:"Benefit Payment", amount:900.00, postDate:"2026-08-05", effDate:"2026-08-05", ref10:"FAST", ref9:"5801", ref7:""},
   {drcr:"CR", type:"GDS Check Cancelled", amount:120.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"GDS", ref9:"5801", ref7:"C"},
   {drcr:"CR", type:"GDS Check Stopped", amount:-60.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"GDS", ref9:"5801", ref7:"S"},
@@ -281,7 +281,7 @@ function renderPhase1() {
 // ---- Phase 2 ----
 const FLOW_RULES = [
   {flowCode:"+301", ref10:"FAST", transType:"CHKD"},
-  {flowCode:"-466", ref10:"GDS", transType:"5801", useEffectiveDate:true, ref7NotIn:["C","S","I"]},
+  {flowCode:"-466", ref10:"GDS", transType:"5801", useEffectiveDate:true, ref7Equals:"E"},
   {flowCode:"+168", ref10:"FAST", transType:"BRCR"},
   {flowCode:"+GDSCK_C", ref10:"GDS", transType:"5801", ref7Equals:"C"},
   {flowCode:"+GDSCK_S", ref10:"GDS", transType:"5801", ref7Equals:"S"},
@@ -303,7 +303,6 @@ function renderPhase2() {
   FLOW_RULES.forEach(rule => {
     let qCadency = cadency.filter(r => r.ref10 === rule.ref10 && r.ref9 === rule.transType);
     if (rule.ref7Equals) qCadency = qCadency.filter(r => r.ref7 === rule.ref7Equals);
-    if (rule.ref7NotIn) qCadency = qCadency.filter(r => !rule.ref7NotIn.includes(r.ref7));
     const qBank = bank.filter(r => r.flowCode === rule.flowCode);
     const dateKey = rule.useEffectiveDate ? "effDate" : "postDate";
 
