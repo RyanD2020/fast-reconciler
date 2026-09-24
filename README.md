@@ -142,7 +142,19 @@ also consistently call this column "Cadency Transaction Type - Ref 9."
 `core/schema.py` now expects `Reference 9` first and falls back to `TR No`
 only for the idealized format, still raising if a file somehow has both.
 
-## Two open items to confirm before this goes further
+**The SAP export layout — resolved: it's a real SAP GL line-item export.**
+Confirmed 2026-09-24 the hard way: `demo.html`'s naive column matching
+silently reported every SAP row as `$0` before it had the same defensive
+check as `core/schema.py`. The real file uses the classic SAP FI
+display-document field set (`Document Type`, `Posting Key`, `Clearing
+Document`, `Profit Center`, `Offsetting Account`, etc.) — `Text` and
+`Document Date` are exactly as assumed, but the amount column is
+**`Amount in Local Currency`**, not `Local Currency Amount` as originally
+guessed (same words, different order). `SAP_AMOUNT_COLUMN_CANDIDATES` now
+includes the real name; see `core/schema.py`'s docstring and
+`tests/test_schema.py` for the regression test.
+
+## Open items to confirm before this goes further
 
 **1. Is "5801" an exact code or a range?** `Cadency_Export_Guide.xlsx`'s
 `"FAST TR NO's"` reference sheet describes it as *"TR 5801 through 5905 —
@@ -153,14 +165,13 @@ sub-codes like 5802–5905, `core/config.py`'s exact-match Phase 1 code list
 would silently under-count the Cadency side. **Confirm with Sean before
 trusting Phase 1 against a full month of real data.**
 
-**2. The actual SAP export layout, and the Treasury/bank export layout.**
-No sample SAP file or Treasury/bank statement file has been provided yet —
-`core/schema.py`'s `Text` / `Document Date` / `Amount` (SAP) and
-`Flow Code` / `Date` / `Amount` (bank) column names are working assumptions,
-the bank one inferred from Sean's July 2026 manual working file rather than
-a raw export. The meeting notes also mention the SAP export "may require
-cleanup before loading," which this shell doesn't yet handle. Get real
-export samples and both should be quick to firm up.
+**2. The actual Treasury/bank export layout.** No real bank/treasury
+statement file has been provided yet — `core/schema.py`'s
+`Flow Code` / `Date` / `Amount` column names are a working assumption
+inferred from Sean's July 2026 manual working file, not a raw export.
+Given the SAP amount-column miss above, don't assume this one is right
+either — confirm against a real export before Phase 2 is trusted in
+production.
 
 ## Other things still open per the meeting notes / business docs (not shell-blocking, but worth tracking)
 

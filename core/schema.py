@@ -13,12 +13,19 @@ Column-name resolution for the raw source files.
    fallback only in case an idealized-format file is ever loaded, and it
    still raises if a file somehow has both (rather than silently guessing).
 
-2. SAP EXPORT LAYOUT
-   No sample SAP export file has been provided -- only a description (a
-   "Text" field and a "Document Date") from the business requirements and
-   procedure docs. The column names below are a working assumption and
-   should be confirmed against a real SAP export before Phase 1 results are
-   trusted in production.
+2. SAP EXPORT LAYOUT -- CONFIRMED (2026-09-24)
+   Ryan hit this directly: a real SAP GL line-item export (the classic
+   FI display-document field set -- Document Type, Posting Key, Clearing
+   Document, Profit Center, Segment, Offsetting Account, etc.) uses "Text"
+   and "Document Date" exactly as assumed, but the amount field is named
+   "Amount in Local Currency" -- not "Local Currency Amount" as originally
+   guessed (same words, different order, so it never matched and Phase 1
+   silently produced $0 for every SAP row until this was caught). The
+   export also has several *other* amount-like columns for parallel
+   currencies (Amount in Loc.Crcy 2/3, Freely Defined Curr. Amt. 2-8) --
+   those are intentionally NOT candidates here; "Amount in Local Currency"
+   is the one that corresponds to the plain "Amount" the business docs
+   describe.
 """
 
 from __future__ import annotations
@@ -29,7 +36,7 @@ TRANS_TYPE_CODE_CANDIDATES = ["Reference 9", "TR No"]
 
 SAP_TEXT_COLUMN_CANDIDATES = ["Text", "SAP Text", "TEXT"]
 SAP_DATE_COLUMN_CANDIDATES = ["Document Date", "Doc Date"]
-SAP_AMOUNT_COLUMN_CANDIDATES = ["Amount", "Entry Amount", "Local Currency Amount"]
+SAP_AMOUNT_COLUMN_CANDIDATES = ["Amount", "Entry Amount", "Local Currency Amount", "Amount in Local Currency"]
 
 BANK_FLOW_CODE_COLUMN_CANDIDATES = ["Flow Code", "Bank Flow Code"]
 BANK_DATE_COLUMN_CANDIDATES = ["Date", "Value Date", "Post Date"]
