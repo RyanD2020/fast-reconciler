@@ -63,6 +63,11 @@
   .sheet-picker { margin: 4px 0; font-size: 13px; }
   .sheet-picker select { padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 13px; }
   .sheet-picker label { color: #555; }
+  .file-error {
+    background: var(--red-bg); color: var(--red-fg); font-size: 12.5px;
+    padding: 6px 10px; border-radius: 4px; margin: 6px 0; display: none;
+  }
+  .file-error:not(:empty) { display: block; }
   .run-btn {
     background: var(--accent); color: white; border: none; border-radius: 6px;
     padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; margin: 10px 0 20px;
@@ -144,12 +149,14 @@
         <h3>Cadency export</h3>
         <input type="file" class="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event, 'p1-cadency')">
         <div class="sheet-picker" id="p1-cadency-sheet-picker"></div>
+        <div class="file-error" id="p1-cadency-error"></div>
         <div class="rowcount" id="p1-cadency-count"></div>
       </div>
       <div class="card">
         <h3>SAP export</h3>
         <input type="file" class="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event, 'p1-sap')">
         <div class="sheet-picker" id="p1-sap-sheet-picker"></div>
+        <div class="file-error" id="p1-sap-error"></div>
         <div class="rowcount" id="p1-sap-count"></div>
       </div>
     </div>
@@ -168,12 +175,14 @@
         <h3>Cadency export</h3>
         <input type="file" class="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event, 'p2-cadency')">
         <div class="sheet-picker" id="p2-cadency-sheet-picker"></div>
+        <div class="file-error" id="p2-cadency-error"></div>
         <div class="rowcount" id="p2-cadency-count"></div>
       </div>
       <div class="card">
         <h3>Treasury / bank export</h3>
         <input type="file" class="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event, 'p2-bank')">
         <div class="sheet-picker" id="p2-bank-sheet-picker"></div>
+        <div class="file-error" id="p2-bank-error"></div>
         <div class="rowcount" id="p2-bank-count"></div>
       </div>
     </div>
@@ -406,32 +415,91 @@ function excelDateToStr(v) {
   return v || "";
 }
 
+// Same candidate lists as core/schema.py -- kept in sync manually since
+// this demo has no way to import the Python module. If you add a
+// candidate here, add it there too (and vice versa).
+const CADENCY_TRANS_TYPE_CANDIDATES = ["Reference 9", "TR No"];
+const SAP_TEXT_CANDIDATES = ["Text", "SAP Text", "TEXT"];
+const SAP_DATE_CANDIDATES = ["Document Date", "Doc Date"];
+const SAP_AMOUNT_CANDIDATES = ["Amount", "Entry Amount", "Local Currency Amount"];
+const BANK_FLOW_CODE_CANDIDATES = ["Flow Code", "Bank Flow Code"];
+const BANK_DATE_CANDIDATES = ["Date", "Value Date", "Post Date"];
+const BANK_AMOUNT_CANDIDATES = ["Amount", "Net Amount"];
+
+// Mirrors core/schema.py's _resolve_column: pick whichever candidate
+// column name is present, and fail loudly (not silently) if none or more
+// than one match, rather than letting a mismatched header quietly turn
+// into missing data.
+function resolveColumn(headers, candidates, label) {
+  const present = candidates.filter(c => headers.includes(c));
+  if (present.length === 0) {
+    throw new Error(
+      `Could not find the ${label} column. Looked for: ${candidates.join(", ")}. ` +
+      `Columns present: ${headers.join(", ")}`
+    );
+  }
+  if (present.length > 1) {
+    throw new Error(
+      `Found more than one candidate column for ${label} (${present.join(", ")}) -- ` +
+      "need a human to confirm which is authoritative."
+    );
+  }
+  return present[0];
+}
+
+// Handles "$1,234.56" / "(1,234.56)" style manual formatting, and throws
+// instead of silently returning 0 for a value that isn't actually a number.
+function parseAmount(v, label) {
+  if (typeof v === "number") return v;
+  if (v === null || v === undefined || v === "") return 0;
+  const cleaned = String(v).replace(/[$,]/g, "").trim();
+  const isParenNegative = /^\(.*\)$/.test(cleaned);
+  const n = Number(isParenNegative ? cleaned.slice(1, -1) : cleaned);
+  if (Number.isNaN(n)) {
+    throw new Error(`Could not read "${v}" in the ${label} column as a number.`);
+  }
+  return isParenNegative ? -n : n;
+}
+
 function mapCadencyRows(rawRows) {
+  if (!rawRows.length) return [];
+  const headers = Object.keys(rawRows[0]);
+  const ref9Col = resolveColumn(headers, CADENCY_TRANS_TYPE_CANDIDATES, "Cadency trans-type code");
   return rawRows.map(r => ({
     drcr: r["DR/CR"] || "",
     type: r["Transaction Type"] || "",
-    amount: Number(r["Amount"]) || 0,
+    amount: parseAmount(r["Amount"], "Cadency Amount"),
     postDate: excelDateToStr(r["Post Date"]),
     effDate: excelDateToStr(r["Effective Date"] || r["Post Date"]),
     ref10: r["Reference 10"] || "",
-    ref9: String(r["Reference 9"] || r["TR No"] || ""),
+    ref9: String(r[ref9Col] || ""),
     ref7: String(r["Reference 7"] || ""),
   }));
 }
 
 function mapSapRows(rawRows) {
+  if (!rawRows.length) return [];
+  const headers = Object.keys(rawRows[0]);
+  const textCol = resolveColumn(headers, SAP_TEXT_CANDIDATES, "SAP Text");
+  const dateCol = resolveColumn(headers, SAP_DATE_CANDIDATES, "SAP Document Date");
+  const amountCol = resolveColumn(headers, SAP_AMOUNT_CANDIDATES, "SAP Amount");
   return rawRows.map(r => ({
-    text: r["Text"] || "",
-    date: excelDateToStr(r["Document Date"]),
-    amount: Number(r["Amount"]) || 0,
+    text: r[textCol] || "",
+    date: excelDateToStr(r[dateCol]),
+    amount: parseAmount(r[amountCol], "SAP Amount"),
   }));
 }
 
 function mapBankRows(rawRows) {
+  if (!rawRows.length) return [];
+  const headers = Object.keys(rawRows[0]);
+  const flowCodeCol = resolveColumn(headers, BANK_FLOW_CODE_CANDIDATES, "Bank Flow Code");
+  const dateCol = resolveColumn(headers, BANK_DATE_CANDIDATES, "Bank Date");
+  const amountCol = resolveColumn(headers, BANK_AMOUNT_CANDIDATES, "Bank Amount");
   return rawRows.map(r => ({
-    flowCode: r["Flow Code"] || "",
-    date: excelDateToStr(r["Date"]),
-    amount: Number(r["Amount"]) || 0,
+    flowCode: r[flowCodeCol] || "",
+    date: excelDateToStr(r[dateCol]),
+    amount: parseAmount(r[amountCol], "Bank Amount"),
   }));
 }
 
@@ -483,11 +551,19 @@ function handleFileUpload(event, sourceKey) {
 
 function loadSheetIntoSource(wb, sheetName, sourceKey) {
   const config = SOURCE_CONFIG[sourceKey];
+  const errorEl = document.getElementById(`${sourceKey}-error`);
+  const countEl = document.getElementById(`${sourceKey}-count`);
+  errorEl.textContent = "";
+
   const rawRows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "", raw: true });
-  const rows = config.mapper(rawRows);
-  config.apply(rows);
-  document.getElementById(`${sourceKey}-count`).textContent =
-    `Loaded ${rows.length} rows from "${sheetName}".`;
+  try {
+    const rows = config.mapper(rawRows);
+    config.apply(rows);
+    countEl.textContent = `Loaded ${rows.length} rows from "${sheetName}".`;
+  } catch (err) {
+    countEl.textContent = "";
+    errorEl.textContent = `Could not read "${sheetName}": ${err.message}`;
+  }
 }
 
 function alertNoXlsx() {
