@@ -15,6 +15,20 @@ from .io_utils import list_sheet_names, load_tabular
 from .models import ReconStatus
 
 
+def _html(markup: str) -> str:
+    """Collapses a multi-line/indented HTML string to one line before handing
+    it to st.markdown(unsafe_allow_html=True).
+
+    Without this, Markdown treats any line indented 4+ spaces as a
+    preformatted code block -- and Python f-strings written with normal
+    nested indentation always have that much leading whitespace. The
+    practical effect: the HTML never gets parsed as HTML at all, and prints
+    as literal visible tag text instead (confirmed in production -- see
+    git history around 2026-10-20 for the screenshot that caught this).
+    """
+    return " ".join(line.strip() for line in markup.strip().splitlines())
+
+
 def apply_brand_theme() -> None:
     """Injects NYL brand CSS: Dark Blue / Blue / Green / white+grey only,
     Georgia headlines + Arial body, no rounded corners, no shadows, no
@@ -28,31 +42,39 @@ def apply_brand_theme() -> None:
     after an upgrade, this is the first place to check.
     """
     st.markdown(
-        f"""
-        <style>
-        html, body, [class*="css"] {{ font-family: {BODY_FONT}; }}
-        h1, h2, h3, [data-testid="stMetricValue"] {{
-            font-family: {HEADLINE_FONT} !important;
-            color: {DARK_BLUE};
-        }}
-        [data-testid="stSidebar"] {{ background-color: {DARK_BLUE}; }}
-        [data-testid="stSidebar"] * {{ color: {WHITE} !important; }}
-        .stButton > button, .stDownloadButton > button {{
-            border-radius: 0 !important;
-            box-shadow: none !important;
-        }}
-        .stButton > button[kind="primary"] {{
-            background-color: {DARK_BLUE};
-            border: none;
-        }}
-        .stDownloadButton > button {{
-            background-color: {WHITE};
-            color: {BLUE};
-            border: 2px solid {BLUE} !important;
-        }}
-        [data-testid="stExpander"] summary {{ color: {BLUE}; }}
-        </style>
-        """,
+        _html(
+            f"""
+            <style>
+            html, body, [class*="css"] {{ font-family: {BODY_FONT}; }}
+            h1, h2, h3, [data-testid="stMetricValue"] {{
+                font-family: {HEADLINE_FONT} !important;
+                color: {DARK_BLUE};
+            }}
+            [data-testid="stSidebar"] {{ background-color: {DARK_BLUE}; }}
+            [data-testid="stSidebar"] label,
+            [data-testid="stSidebar"] .stMarkdown,
+            [data-testid="stSidebar"] .stMarkdown p,
+            [data-testid="stSidebar"] summary,
+            [data-testid="stSidebar"] h1,
+            [data-testid="stSidebar"] h2,
+            [data-testid="stSidebar"] h3 {{ color: {WHITE} !important; }}
+            .stButton > button, .stDownloadButton > button {{
+                border-radius: 0 !important;
+                box-shadow: none !important;
+            }}
+            .stButton > button[kind="primary"] {{
+                background-color: {DARK_BLUE};
+                border: none;
+            }}
+            .stDownloadButton > button {{
+                background-color: {WHITE};
+                color: {BLUE};
+                border: 2px solid {BLUE} !important;
+            }}
+            [data-testid="stExpander"] summary {{ color: {BLUE}; }}
+            </style>
+            """
+        ),
         unsafe_allow_html=True,
     )
 
@@ -75,15 +97,17 @@ def _logo_mark_html(size_px: int, font_px: float) -> str:
 def render_brand_header(title: str) -> None:
     """Sticky-feeling header bar: logo mark + title, Dark Blue background."""
     st.markdown(
-        f"""
-        <div style="background-color:{DARK_BLUE}; margin:-1rem -1rem 1rem -1rem;
-                    padding:14px 24px; display:flex; align-items:center; gap:12px;">
-          {_logo_mark_html(40, 7)}
-          <span style="color:{WHITE}; font-family:{HEADLINE_FONT}; font-size:21px; font-weight:700;">
-            {title}
-          </span>
-        </div>
-        """,
+        _html(
+            f"""
+            <div style="background-color:{DARK_BLUE}; margin:-1rem -1rem 1rem -1rem;
+                        padding:14px 24px; display:flex; align-items:center; gap:12px;">
+              {_logo_mark_html(40, 7)}
+              <span style="color:{WHITE}; font-family:{HEADLINE_FONT}; font-size:21px; font-weight:700;">
+                {title}
+              </span>
+            </div>
+            """
+        ),
         unsafe_allow_html=True,
     )
 
@@ -93,17 +117,19 @@ def render_brand_footer() -> None:
     line -- per the NYL brand spec.
     """
     st.markdown(
-        f"""
-        <div style="background-color:{GREY}; border-top:3px solid {DARK_BLUE};
-                    margin:40px -1rem -1rem -1rem; padding:16px 24px;
-                    display:flex; align-items:center; gap:12px;">
-          {_logo_mark_html(32, 5.5)}
-          <span style="font-family:{BODY_FONT}; font-size:12px; color:{DARK_BLUE};">
-            New York Life Insurance Company &mdash; For internal use only.
-            Questions? Contact Ryan Doswell.
-          </span>
-        </div>
-        """,
+        _html(
+            f"""
+            <div style="background-color:{GREY}; border-top:3px solid {DARK_BLUE};
+                        margin:40px -1rem -1rem -1rem; padding:16px 24px;
+                        display:flex; align-items:center; gap:12px;">
+              {_logo_mark_html(32, 5.5)}
+              <span style="font-family:{BODY_FONT}; font-size:12px; color:{DARK_BLUE};">
+                New York Life Insurance Company &mdash; For internal use only.
+                Questions? Contact Ryan Doswell.
+              </span>
+            </div>
+            """
+        ),
         unsafe_allow_html=True,
     )
 

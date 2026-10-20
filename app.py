@@ -42,9 +42,13 @@ account_number = st.sidebar.selectbox(
 account = get_account(account_number)
 
 with st.sidebar.expander("Active rules for this account"):
+    # Joined into plain strings rather than passed as lists: st.write()
+    # renders a list/dict via its own JSON-array widget, which ignores
+    # apply_brand_theme()'s page-level CSS and was unreadable against the
+    # dark sidebar (light grey box, low-contrast text).
     st.write("Reference 10 (FAST):", account.fast_reference10_value)
-    st.write("Phase 1 qualifying Trans Types:", list(account.phase1_trans_type_codes))
-    st.write("Phase 1 qualifying SAP Text values:", list(account.phase1_sap_text_values))
+    st.write("Phase 1 qualifying Trans Types:", ", ".join(account.phase1_trans_type_codes))
+    st.write("Phase 1 qualifying SAP Text values:", ", ".join(account.phase1_sap_text_values))
     st.caption("Edit core/config.py to change these - no other code should need to change.")
 
 st.divider()
