@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Iterable
 
-from .brand import BUILT_BY, COMMUNITY, STATUS_CSS, STATUS_GLYPHS, TEAM
+from .brand import BUILT_BY, STATUS_CSS, STATUS_GLYPHS
 from .config import FlowCodeRule
 from .insights import ReconSummary, flow_code_of
 from .models import DailyResult, Phase1Result, Phase2Result
@@ -100,8 +100,7 @@ def hero(title: str, eyebrow: str, lede: str, meta: Iterable[str] = ()) -> str:
         <div class="nyl-lockup">
           {logo_mark(46)}
           <span class="nyl-lockup__divider"></span>
-          <span class="nyl-lockup__name">FAST Clearing Account Reconciler
-            <span class="nyl-lockup__sub">{esc(TEAM)} &middot; {esc(COMMUNITY)}</span></span>
+          <span class="nyl-lockup__name">FAST Clearing Account Reconciler</span>
         </div>
         <div class="nyl-eyebrow">{esc(eyebrow)}</div>
         <div class="nyl-hero__title" role="heading" aria-level="1">{esc(title)}</div>
@@ -469,8 +468,6 @@ def credit_banner() -> str:
       <div class="nyl-credit__body">
         <div class="nyl-eyebrow">Designed &amp; built by</div>
         <div class="nyl-credit__name">{esc(BUILT_BY)}</div>
-        <div class="nyl-credit__team">{esc(TEAM)}</div>
-        <div class="nyl-coda">{esc(COMMUNITY)}</div>
       </div>
     </div>
     """
@@ -482,10 +479,8 @@ def profile_card() -> str:
       <div class="nyl-eyebrow">Built by</div>
       <div class="nyl-profile__row">
         <div class="nyl-avatar" aria-hidden="true">{esc(_initials(BUILT_BY))}</div>
-        <div><div class="nyl-profile__name">{esc(BUILT_BY)}</div>
-          <div class="nyl-profile__team">{esc(TEAM)}</div></div>
+        <div class="nyl-profile__name">{esc(BUILT_BY)}</div>
       </div>
-      <div class="nyl-coda">{esc(COMMUNITY)}</div>
     </div>
     """
 
@@ -498,7 +493,7 @@ def footer() -> str:
         <div><div class="nyl-footer__company">New York Life Insurance Company</div>
           <div class="nyl-footer__small">For internal use only.</div></div>
       </div>
-      <div class="nyl-footer__credit">Built by <b>{esc(BUILT_BY)}</b> &middot; {esc(TEAM)} &middot; {esc(COMMUNITY)}</div>
+      <div class="nyl-footer__credit">Built by <b>{esc(BUILT_BY)}</b></div>
       <div class="nyl-footer__contact">Questions? Contact {esc(BUILT_BY)}</div>
     </div>
     """

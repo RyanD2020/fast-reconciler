@@ -16,7 +16,7 @@ from __future__ import annotations
 import streamlit as st
 
 from core import components
-from core.brand import BUILT_BY, COMMUNITY, TEAM
+from core.brand import BUILT_BY
 from core.ui import account_selector, apply_brand_theme, render
 
 st.set_page_config(
@@ -27,7 +27,7 @@ st.set_page_config(
     menu_items={
         "Get help": None,
         "Report a bug": None,
-        "About": f"**FAST Clearing Account Reconciler**\n\nBuilt by {BUILT_BY} - {TEAM} - {COMMUNITY}",
+        "About": f"**FAST Clearing Account Reconciler**\n\nBuilt by {BUILT_BY}",
     },
 )
 apply_brand_theme()

@@ -1,6 +1,6 @@
 # FAST Clearing Account Reconciler — Shell
 
-Built by **Ryan Doswell** · Institutional Annuities Technology · Coda
+Built by **Ryan Doswell**
 
 A Streamlit prototype for the daily FAST reconciliation tool described in
 Sean Kelly's Accounting Reconciliation Business Requirements doc, the

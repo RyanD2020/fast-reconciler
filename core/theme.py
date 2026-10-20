@@ -159,7 +159,6 @@ _COMPONENTS = """
 .nyl-lockup { display: flex; align-items: center; gap: 14px; margin-bottom: 30px; }
 .nyl-lockup__divider { width: 1px; height: 30px; background: rgba(255, 255, 255, .3); }
 .nyl-lockup__name { font: 700 12px/1.3 var(--nyl-sans); letter-spacing: .16em; text-transform: uppercase; color: var(--nyl-white); }
-.nyl-lockup__sub { display: block; font-weight: 400; letter-spacing: .08em; color: var(--nyl-ink-on-dark); text-transform: none; }
 .nyl-hero .nyl-eyebrow { color: var(--nyl-ink-on-dark); }
 .nyl-hero__title { font: 400 44px/1.08 var(--nyl-serif); color: var(--nyl-white); margin-top: 14px; animation: nyl-rise .6s .1s ease both; }
 .nyl-hero__lede { font: 17px/1.5 var(--nyl-sans); color: var(--nyl-ink-on-dark); margin-top: 14px; max-width: 640px; animation: nyl-rise .6s .18s ease both; }
@@ -324,21 +323,14 @@ _COMPONENTS = """
 .nyl-credit__body { position: relative; z-index: 1; }
 .nyl-credit .nyl-eyebrow { color: var(--nyl-ink-on-dark); }
 .nyl-credit__name { font: 400 26px/1.2 var(--nyl-serif); color: var(--nyl-white); margin-top: 10px; }
-.nyl-credit__team { font: 14px/1.45 var(--nyl-sans); color: var(--nyl-ink-on-dark); margin-top: 4px; }
 
 .nyl-avatar { flex: 0 0 auto; width: 56px; height: 56px; background: var(--nyl-blue); color: var(--nyl-white); font: 400 22px/56px var(--nyl-serif); text-align: center; position: relative; z-index: 1; }
-.nyl-coda {
-  display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; padding: 7px 11px; border: 1px solid rgba(255, 255, 255, .38);
-  font: 700 11px/1 var(--nyl-sans); letter-spacing: .2em; text-transform: uppercase; color: var(--nyl-white);
-}
-.nyl-coda::before { content: ""; width: 8px; height: 8px; background: var(--nyl-green); }
 
 .nyl-profile { margin-top: 22px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, .18); }
 .nyl-profile .nyl-eyebrow { color: var(--nyl-ink-on-dark); font-size: 10px; }
 .nyl-profile__row { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 .nyl-profile .nyl-avatar { width: 42px; height: 42px; font-size: 17px; line-height: 42px; }
 .nyl-profile__name { font: 400 17px/1.2 var(--nyl-serif); color: var(--nyl-white); }
-.nyl-profile__team { font: 12px/1.35 var(--nyl-sans); color: var(--nyl-ink-on-dark); margin-top: 2px; }
 
 .nyl-footer {
   display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 28px; margin-top: 56px;

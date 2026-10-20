@@ -55,5 +55,3 @@ STATUS_CSS = {
 }
 
 BUILT_BY = "Ryan Doswell"
-TEAM = "Institutional Annuities Technology"
-COMMUNITY = "Coda"
