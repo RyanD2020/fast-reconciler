@@ -112,7 +112,9 @@ def render_results(results_df: pd.DataFrame) -> None:
         }.get(row["Status"], "")
         return [color] * len(row)
 
-    st.dataframe(results_df.style.apply(_highlight, axis=1), use_container_width=True)
+    numeric_cols = results_df.select_dtypes(include="number").columns
+    styled = results_df.style.apply(_highlight, axis=1).format({col: "{:,.2f}" for col in numeric_cols})
+    st.dataframe(styled, use_container_width=True)
 
     n_bad = int((results_df["Status"] == ReconStatus.DOES_NOT_RECONCILE.value).sum())
     n_manual = int((results_df["Status"] == ReconStatus.MANUAL_REVIEW.value).sum())
