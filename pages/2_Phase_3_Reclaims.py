@@ -4,8 +4,10 @@ import pandas as pd
 import streamlit as st
 
 from core.config import ACCOUNTS
+from core.ui import apply_brand_theme, render_brand_footer, render_brand_header
 
-st.title("Phase 3 - Reclaim Credit / Debit vs. Legacy Accounts")
+apply_brand_theme()
+render_brand_header("Phase 3 - Reclaim Credit / Debit vs. Legacy Accounts")
 
 st.info(
     "Not built yet. This page will net FAST Reclaim Credit (RCCR / +166) and "
@@ -32,3 +34,5 @@ st.caption(
     "not a daily one - the trigger condition for when it's required still "
     "needs to be documented with the business."
 )
+
+render_brand_footer()

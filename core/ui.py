@@ -10,8 +10,102 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from .brand import BLUE, BODY_FONT, DARK_BLUE, GREY, HEADLINE_FONT, STATUS_COLORS, WHITE
 from .io_utils import list_sheet_names, load_tabular
 from .models import ReconStatus
+
+
+def apply_brand_theme() -> None:
+    """Injects NYL brand CSS: Dark Blue / Blue / Green / white+grey only,
+    Georgia headlines + Arial body, no rounded corners, no shadows, no
+    gradients. Call once near the top of each page.
+
+    Streamlit's own theming (.streamlit/config.toml) sets the base colors;
+    this covers what that can't -- per-element font-family and stripping
+    rounded corners/shadows -- via direct CSS targeting Streamlit's internal
+    data-testid attributes. Those attribute names aren't a public API and
+    can change between Streamlit versions; if the theme stops applying
+    after an upgrade, this is the first place to check.
+    """
+    st.markdown(
+        f"""
+        <style>
+        html, body, [class*="css"] {{ font-family: {BODY_FONT}; }}
+        h1, h2, h3, [data-testid="stMetricValue"] {{
+            font-family: {HEADLINE_FONT} !important;
+            color: {DARK_BLUE};
+        }}
+        [data-testid="stSidebar"] {{ background-color: {DARK_BLUE}; }}
+        [data-testid="stSidebar"] * {{ color: {WHITE} !important; }}
+        .stButton > button, .stDownloadButton > button {{
+            border-radius: 0 !important;
+            box-shadow: none !important;
+        }}
+        .stButton > button[kind="primary"] {{
+            background-color: {DARK_BLUE};
+            border: none;
+        }}
+        .stDownloadButton > button {{
+            background-color: {WHITE};
+            color: {BLUE};
+            border: 2px solid {BLUE} !important;
+        }}
+        [data-testid="stExpander"] summary {{ color: {BLUE}; }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _logo_mark_html(size_px: int, font_px: float) -> str:
+    """CSS recreation of the NYL logo mark (blue square, stacked white
+    "NEW YORK LIFE" text) based on a reference image, not an official logo
+    asset file -- see core/brand.py's docstring.
+    """
+    return f"""
+    <div style="width:{size_px}px; height:{size_px}px; background-color:{BLUE};
+                display:flex; flex-direction:column; align-items:center; justify-content:center;
+                flex-shrink:0; font-family:{BODY_FONT}; font-weight:700; color:{WHITE};
+                text-transform:uppercase; line-height:1.05; text-align:center; font-size:{font_px}px;">
+      <span>New</span><span>York</span><span>Life</span>
+    </div>
+    """
+
+
+def render_brand_header(title: str) -> None:
+    """Sticky-feeling header bar: logo mark + title, Dark Blue background."""
+    st.markdown(
+        f"""
+        <div style="background-color:{DARK_BLUE}; margin:-1rem -1rem 1rem -1rem;
+                    padding:14px 24px; display:flex; align-items:center; gap:12px;">
+          {_logo_mark_html(40, 7)}
+          <span style="color:{WHITE}; font-family:{HEADLINE_FONT}; font-size:21px; font-weight:700;">
+            {title}
+          </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_brand_footer() -> None:
+    """Footer bar: logo mark, company name, internal-use notice, contact
+    line -- per the NYL brand spec.
+    """
+    st.markdown(
+        f"""
+        <div style="background-color:{GREY}; border-top:3px solid {DARK_BLUE};
+                    margin:40px -1rem -1rem -1rem; padding:16px 24px;
+                    display:flex; align-items:center; gap:12px;">
+          {_logo_mark_html(32, 5.5)}
+          <span style="font-family:{BODY_FONT}; font-size:12px; color:{DARK_BLUE};">
+            New York Life Insurance Company &mdash; For internal use only.
+            Questions? Contact Ryan Doswell.
+          </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _pick_sheet(label: str, key: str, **source_kwargs) -> "int | str":
@@ -100,20 +194,23 @@ def run_with_persistence(label: str, state_key: str, ready: bool, account_number
 
 
 def render_results(results_df: pd.DataFrame) -> None:
-    """Color-codes and displays a DailyResult-derived results dataframe,
-    and shows a one-line summary of DOES NOT RECONCILE / MANUAL REVIEW counts.
+    """Displays a DailyResult-derived results dataframe with the Status
+    column colored per the NYL brand (white/grey are the only background
+    colors allowed, so status is shown via bold colored text rather than a
+    row background fill), and a one-line summary of DOES NOT RECONCILE /
+    MANUAL REVIEW counts.
     """
+    status_col_idx = list(results_df.columns).index("Status")
 
-    def _highlight(row):
-        color = {
-            ReconStatus.RECONCILED.value: "background-color: #d4edda",
-            ReconStatus.DOES_NOT_RECONCILE.value: "background-color: #f8d7da",
-            ReconStatus.MANUAL_REVIEW.value: "background-color: #fff3cd",
-        }.get(row["Status"], "")
-        return [color] * len(row)
+    def _style_status(row):
+        styles = [""] * len(row)
+        color = STATUS_COLORS.get(row["Status"])
+        if color:
+            styles[status_col_idx] = f"color: {color}; font-weight: 700;"
+        return styles
 
     numeric_cols = results_df.select_dtypes(include="number").columns
-    styled = results_df.style.apply(_highlight, axis=1).format({col: "{:,.2f}" for col in numeric_cols})
+    styled = results_df.style.apply(_style_status, axis=1).format({col: "{:,.2f}" for col in numeric_cols})
     st.dataframe(styled, use_container_width=True)
 
     n_bad = int((results_df["Status"] == ReconStatus.DOES_NOT_RECONCILE.value).sum())

@@ -88,6 +88,33 @@ options. `demo.html` has the same picker (upload it there in either the
 Phase 1 or Phase 2 tab to see it live in the browser mockup, no Streamlit
 needed).
 
+## NYL brand theme
+
+Both the real app and `demo.html` use the NYL brand palette (`core/brand.py`
+is the Python source of truth; `demo.html`'s `<style>` block mirrors it
+manually, same pattern as the schema.py column-candidate lists): Dark Blue
+`#000A62` for primary surfaces/headlines/buttons, Blue `#0468FF` for the
+logo mark/eyebrow labels/section markers, Green `#016355` for
+RECONCILED/PASS states, White and `#E3E0DD` Grey as the only background
+colors, Georgia for headlines and Arial for body/UI text, no rounded
+corners, no shadows, no gradients.
+
+**One deliberate deviation from a literal brand reading:** the original
+results table used colored row *backgrounds* (green/red/yellow) for
+RECONCILED/DOES NOT RECONCILE/MANUAL REVIEW. The brand palette has no
+red or yellow, and specifies white/grey as the *only* background colors —
+so status is now shown via bold colored **text** instead (Green /
+Dark Blue / Blue — Dark Blue standing in as the most severe color for
+DOES NOT RECONCILE, since there's no red to reach for), on plain
+white/grey rows. Revisit this if NYL brand guidance ever adds a defined
+"fail" or "warning" color.
+
+No official NYL logo file was available — both the app and demo use a
+plain CSS-drawn square in the brand blue as an explicit placeholder mark,
+not an official logo. Swap `core/ui.py`'s `render_brand_header` /
+`render_brand_footer` (and `demo.html`'s `.logo-mark`) for a real `<img>`
+once a logo asset exists.
+
 ## Results survive a dropped/reconnected session
 
 Both Phase 1 and Phase 2 persist their results in `st.session_state`

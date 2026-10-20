@@ -9,3 +9,14 @@ headless = true
 address = "0.0.0.0"
 enableCORS = false
 enableXsrfProtection = false
+
+# NYL brand colors (see core/brand.py). Streamlit's [theme] only supports a
+# single base font family ("sans serif" here, for body/UI text) -- the
+# Georgia headline font and anything more granular is layered on top via
+# core/ui.py::apply_brand_theme()'s CSS injection.
+[theme]
+primaryColor = "#000A62"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#E3E0DD"
+textColor = "#000A62"
+font = "sans serif"

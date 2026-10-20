@@ -6,9 +6,17 @@ import streamlit as st
 from core.config import ACCOUNTS
 from core.export import export_workbook
 from core.matching import run_phase2
-from core.ui import render_results, run_with_persistence, source_input
+from core.ui import (
+    apply_brand_theme,
+    render_brand_footer,
+    render_brand_header,
+    render_results,
+    run_with_persistence,
+    source_input,
+)
 
-st.title("Phase 2 - Treasury / Bank Flow Code Matching")
+apply_brand_theme()
+render_brand_header("Phase 2 - Treasury / Bank Flow Code Matching")
 st.caption(
     "Each bank Flow Code reconciles independently, daily, against its own Cadency "
     "population. -466 uses Cadency Effective Date (settlement-delay exception). "
@@ -83,3 +91,5 @@ elif not ready:
         "Load both a Cadency export and a Treasury/bank statement export above, "
         "then run the reconciliation."
     )
+
+render_brand_footer()

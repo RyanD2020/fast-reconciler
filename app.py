@@ -15,11 +15,19 @@ import streamlit as st
 from core.config import ACCOUNTS, get_account
 from core.export import export_workbook
 from core.matching import run_phase1
-from core.ui import render_results, run_with_persistence, source_input
+from core.ui import (
+    apply_brand_theme,
+    render_brand_footer,
+    render_brand_header,
+    render_results,
+    run_with_persistence,
+    source_input,
+)
 
 st.set_page_config(page_title="FAST Reconciler", layout="wide")
+apply_brand_theme()
+render_brand_header("FAST Clearing Account Reconciler")
 
-st.title("FAST Clearing Account Reconciler")
 st.caption(
     "Shell / prototype. Phase 1 (FAST vs. SAP) and Phase 2 (Treasury) are functional - "
     "see the Phase 2 page in the sidebar. Phase 3 (Reclaims) is still stubbed."
@@ -88,3 +96,5 @@ if persisted is not None:
     )
 elif not ready:
     st.info("Load both a Cadency export and a SAP export above, then run the reconciliation.")
+
+render_brand_footer()
