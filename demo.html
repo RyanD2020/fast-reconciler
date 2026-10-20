@@ -44,6 +44,7 @@
   }
   .logo-mark.small { width: 32px; height: 32px; font-size: 5.5px; }
   .brand-title { font-family: var(--font-headline); font-size: 20px; font-weight: 700; }
+  .brand-credit { margin-left: auto; font-family: var(--font-body); font-size: 12px; letter-spacing: .06em; color: #B9BCE0; }
   .layout { display: flex; min-height: 70vh; }
   .sidebar {
     width: 300px; background: var(--dark-blue); color: var(--white);
@@ -132,6 +133,7 @@
 <header class="brand-header">
   <div class="logo-mark"><span>New</span><span>York</span><span>Life</span></div>
   <span class="brand-title">FAST Clearing Account Reconciler</span>
+  <span class="brand-credit">Ryan Doswell &middot; Institutional Annuities Technology &middot; Coda</span>
 </header>
 
 <div class="layout">
@@ -225,23 +227,25 @@
 
 <footer class="brand-footer">
   <div class="logo-mark small"><span>New</span><span>York</span><span>Life</span></div>
-  <span>New York Life Insurance Company &mdash; For internal use only. Questions? Contact Ryan Doswell.</span>
+  <span>New York Life Insurance Company &mdash; For internal use only. Built by Ryan Doswell &middot; Institutional Annuities Technology &middot; Coda. Questions? Contact Ryan Doswell.</span>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 // ---- Embedded sample data, exactly matching sample_data/*.csv ----
+// `amount` here is the signed TA (True Amount) column -- DR negative, CR
+// positive -- not the unsigned "Amount" column, same as core/matching.py.
 const cadency = [
-  {drcr:"DR", type:"Benefit Payment", amount:1000.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"5801", ref7:""},
-  {drcr:"DR", type:"Interest on Benefits", amount:250.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"2105", ref7:""},
-  {drcr:"DR", type:"Overpayment Deduction", amount:-75.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"DEDU", ref7:""},
+  {drcr:"DR", type:"Benefit Payment", amount:-1000.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"5801", ref7:""},
+  {drcr:"DR", type:"Interest on Benefits", amount:-250.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"2105", ref7:""},
+  {drcr:"CR", type:"Overpayment Deduction", amount:75.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"DEDU", ref7:""},
   {drcr:"CR", type:"Check Deposit", amount:500.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"FAST", ref9:"CHKD", ref7:""},
-  {drcr:"DR", type:"Benefit Payment", amount:2000.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"FAST", ref9:"5801", ref7:""},
-  {drcr:"DR", type:"Write Off", amount:300.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"FAST", ref9:"SJ90", ref7:""},
-  {drcr:"DR", type:"GDS EFT", amount:150.00, postDate:"2026-08-04", effDate:"2026-08-06", ref10:"GDS", ref9:"5801", ref7:"E"},
-  {drcr:"DR", type:"Benefit Payment", amount:900.00, postDate:"2026-08-05", effDate:"2026-08-05", ref10:"FAST", ref9:"5801", ref7:""},
+  {drcr:"DR", type:"Benefit Payment", amount:-2000.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"FAST", ref9:"5801", ref7:""},
+  {drcr:"DR", type:"Write Off", amount:-300.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"FAST", ref9:"SJ90", ref7:""},
+  {drcr:"DR", type:"GDS EFT", amount:-150.00, postDate:"2026-08-04", effDate:"2026-08-06", ref10:"GDS", ref9:"5801", ref7:"E"},
+  {drcr:"DR", type:"Benefit Payment", amount:-900.00, postDate:"2026-08-05", effDate:"2026-08-05", ref10:"FAST", ref9:"5801", ref7:""},
   {drcr:"CR", type:"GDS Check Cancelled", amount:120.00, postDate:"2026-08-03", effDate:"2026-08-03", ref10:"GDS", ref9:"5801", ref7:"C"},
-  {drcr:"CR", type:"GDS Check Stopped", amount:-60.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"GDS", ref9:"5801", ref7:"S"},
+  {drcr:"CR", type:"GDS Check Stopped", amount:60.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"GDS", ref9:"5801", ref7:"S"},
   {drcr:"DR", type:"GDS Check Issued", amount:-300.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"GDS", ref9:"5801", ref7:"I"},
   {drcr:"CR", type:"EFT Return of Benefit Payment", amount:75.00, postDate:"2026-08-04", effDate:"2026-08-04", ref10:"FAST", ref9:"BRCR", ref7:""},
   {drcr:"DR", type:"Outgoing Wire", amount:-1000.00, postDate:"2026-08-05", effDate:"2026-08-05", ref10:"FAST", ref9:"WIRE", ref7:""},
@@ -261,9 +265,9 @@ const sap = [
 
 const bank = [
   {flowCode:"+301", date:"2026-08-03", amount:500.00},
-  {flowCode:"-466", date:"2026-08-06", amount:150.00},
+  {flowCode:"-466", date:"2026-08-06", amount:-150.00},
   {flowCode:"+GDSCK_C", date:"2026-08-03", amount:120.00},
-  {flowCode:"+GDSCK_S", date:"2026-08-04", amount:-50.00},
+  {flowCode:"+GDSCK_S", date:"2026-08-04", amount:50.00},
   {flowCode:"-GDSCK_I", date:"2026-08-04", amount:-300.00},
   {flowCode:"+168", date:"2026-08-04", amount:75.00},
   {flowCode:"-495", date:"2026-08-05", amount:-1000.00},
@@ -304,6 +308,9 @@ function statusClass(s) { return "status-" + s.replace(/ /g, "_"); }
 // ---- Phase 1 ----
 const PHASE1_TRANS_TYPES = ["5801", "2105", "DEDU", "OVER", "SJ90"];
 const PHASE1_SAP_TEXT = ["Annuity Payment", "Death Claim Disbursement", "Write Off", "Premium Remittance - Overpayment Recoupment"];
+// Mirrors AccountConfig.phase1_cadency_sign_flip for 19803075: Cadency's
+// True Amount and SAP record this population with opposite signs.
+const PHASE1_CADENCY_SIGN = -1;
 
 let phase1State = null;
 
@@ -319,7 +326,7 @@ function renderPhase1() {
   dates.forEach((date, i) => {
     const cRows = qCadency.filter(r => r.postDate === date);
     const sRows = qSap.filter(r => r.date === date);
-    const cTotal = sum(cRows, "amount");
+    const cTotal = round2(PHASE1_CADENCY_SIGN * sum(cRows, "amount"));
     const sTotal = sum(sRows, "amount");
     const diff = round2(sTotal - cTotal);
     const status = diff === 0 ? "RECONCILED" : "DOES NOT RECONCILE";
@@ -451,6 +458,9 @@ function excelDateToStr(v) {
 // this demo has no way to import the Python module. If you add a
 // candidate here, add it there too (and vice versa).
 const CADENCY_TRANS_TYPE_CANDIDATES = ["Reference 9", "TR No"];
+// Priority order, NOT an ambiguity check: real exports carry both TA (signed)
+// and Amount (unsigned), and the signed one must win -- see core/schema.py.
+const CADENCY_AMOUNT_CANDIDATES = ["TA", "True Amount", "Amount"];
 const SAP_TEXT_CANDIDATES = ["Text", "SAP Text", "TEXT"];
 const SAP_DATE_CANDIDATES = ["Document Date", "Doc Date"];
 const SAP_AMOUNT_CANDIDATES = ["Amount", "Entry Amount", "Local Currency Amount", "Amount in Local Currency"];
@@ -497,10 +507,14 @@ function mapCadencyRows(rawRows) {
   if (!rawRows.length) return [];
   const headers = Object.keys(rawRows[0]);
   const ref9Col = resolveColumn(headers, CADENCY_TRANS_TYPE_CANDIDATES, "Cadency trans-type code");
+  const amountCol = CADENCY_AMOUNT_CANDIDATES.find(c => headers.includes(c));
+  if (!amountCol) {
+    throw new Error(`Could not find a Cadency amount column. Looked for: ${CADENCY_AMOUNT_CANDIDATES.join(", ")}. Columns present: ${headers.join(", ")}`);
+  }
   return rawRows.map(r => ({
     drcr: r["DR/CR"] || "",
     type: r["Transaction Type"] || "",
-    amount: parseAmount(r["Amount"], "Cadency Amount"),
+    amount: parseAmount(r[amountCol], `Cadency ${amountCol}`),
     postDate: excelDateToStr(r["Post Date"]),
     effDate: excelDateToStr(r["Effective Date"] || r["Post Date"]),
     ref10: r["Reference 10"] || "",

@@ -1,5 +1,7 @@
 # FAST Clearing Account Reconciler — Shell
 
+Built by **Ryan Doswell** · Institutional Annuities Technology · Coda
+
 A Streamlit prototype for the daily FAST reconciliation tool described in
 Sean Kelly's Accounting Reconciliation Business Requirements doc, the
 Cadency-to-SAP Monthly Trial Balance Procedure doc, and the CODA project
@@ -23,25 +25,34 @@ captured for it.
 ## Project layout
 
 ```
-app.py                          Streamlit home page — account selector, file inputs, runs Phase 1
+app.py                          Entrypoint + router (st.navigation): theme, sidebar, footer shared by every page
 app.yaml                        Databricks Apps run config
 requirements.txt
+views/
+  overview.py                   Landing page: live status of each phase this session, how it works, credits
+  phase1.py                     Phase 1 - FAST vs. SAP
+  phase2.py                     Phase 2 - Treasury / bank Flow Codes
+  phase3.py                     Phase 3 - reclaim netting (not built yet: captured rules + roadmap)
 core/
   config.py                     AccountConfig / FlowCodeRule registry — the reuse layer (see below)
   schema.py                     Column-name resolution, incl. one still-open assumption (see below)
   io_utils.py                   Loads a source from either an upload or a Databricks Volume path; lists sheet names for the picker
-  ui.py                         Shared Streamlit widgets (file input + sheet picker, color-coded results table)
   matching.py                   run_phase1 / run_phase2 (built); run_phase3 (stub)
   models.py                     DailyResult / Phase1Result / Phase2Result dataclasses
   export.py                     Excel export -- see "Excel export" below
-pages/
-  1_Phase_2_Treasury_Match.py   Built — Treasury/bank Flow Code matching
-  2_Phase_3_Reclaims.py         Stub page
+  insights.py                   Run summaries behind the verdict, KPI tiles and "Run details" (Streamlit-free)
+  brand.py                      NYL colors, fonts, status glyphs, credits -- single source of truth
+  theme.py                      The stylesheet, built from brand.py (Streamlit-free)
+  components.py                 HTML building blocks: hero, verdict, KPI tiles, heartbeat, status matrix... (Streamlit-free)
+  ui.py                         Thin Streamlit glue: file inputs + sheet picker, Run button persistence, workbook download
 tests/
   test_phase1_matching.py       Unit tests for run_phase1 (stdlib unittest, no extra deps)
   test_phase2_matching.py       Unit tests for run_phase2, incl. -466/-GDSCK_* Reference 7 split and manual review
   test_export.py                Unit tests for export_workbook (sheet names, content, status color-fill)
   test_io_utils.py              Unit tests for list_sheet_names / load_tabular (multi-sheet workbook handling)
+  test_schema.py                Unit tests for column resolution (real SAP layout, TA vs. Amount priority)
+  test_insights.py              Unit tests for the verdict / KPI math
+  test_components.py            Unit tests for the UI HTML: escaping of uploaded text, verdict wording, markup shape
 sample_data/
   sample_cadency_export.csv     Synthetic data — NOT real transactions — covers Phase 1 + Phase 2 Flow Codes
   sample_sap_export.csv         Synthetic data — includes one intentional mismatch day
@@ -56,12 +67,15 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Try it against `sample_data/` first: upload both sample files on the home
-page and click **Run Phase 1 Reconciliation**. You should see two
-`RECONCILED` days (8/3, 8/4) and one `DOES NOT RECONCILE` day (8/5, off by
-$50) — that's intentional, to show both states render correctly.
+The app opens on **Overview**. Try it against `sample_data/` first: open
+**Phase 1 · FAST vs. SAP** in the sidebar, upload both sample files and click
+**Run Phase 1 reconciliation**. You should see two `RECONCILED` days (8/3,
+8/4) and one `DOES NOT RECONCILE` day (8/5, off by $50) — that's
+intentional, to show both states render correctly. The sample Cadency file
+mirrors a real export's layout: an unsigned `Amount` column plus the signed
+`TA` column the reconciliation actually uses.
 
-For Phase 2, go to the **Phase 2 - Treasury Match** page in the sidebar and
+For Phase 2, open **Phase 2 · Treasury** in the sidebar and
 upload `sample_cadency_export.csv` and `sample_bank_export.csv`. You should
 see six `RECONCILED` Flow Codes, one `DOES NOT RECONCILE` Flow Code
 (`+GDSCK_S`, off by $10 — intentional), and `-495`/`+195` both flagged
@@ -82,7 +96,7 @@ selected still goes through the normal Phase 1 / Phase 2 filtering logic;
 nothing about this input path skips or trusts pre-filtered data.
 
 Try it against `sample_data/sample_multi_sheet_workbook.xlsx` — upload it
-into either the Cadency or SAP slot on the home page and you'll get the
+into either the Cadency or SAP slot on the Phase 1 page and you'll get the
 sheet picker with `Cadency match to SAP` / `SAP Match to Cadency` as
 options. `demo.html` has the same picker (upload it there in either the
 Phase 1 or Phase 2 tab to see it live in the browser mockup, no Streamlit
@@ -109,11 +123,52 @@ DOES NOT RECONCILE, since there's no red to reach for), on plain
 white/grey rows. Revisit this if NYL brand guidance ever adds a defined
 "fail" or "warning" color.
 
-No official NYL logo file was available — both the app and demo use a
-plain CSS-drawn square in the brand blue as an explicit placeholder mark,
-not an official logo. Swap `core/ui.py`'s `render_brand_header` /
-`render_brand_footer` (and `demo.html`'s `.logo-mark`) for a real `<img>`
-once a logo asset exists.
+**A second deliberate deviation:** numerals (KPI values, step and phase
+numbers) are set in Arial, not Georgia. Georgia only has old-style figures,
+where "0" is an x-height circle, so "$0.00" renders as "$o.oo" — not
+acceptable for the one number this tool exists to show. Georgia stays on
+every headline, title and verdict.
+
+No official NYL logo file was available — the logo mark (blue square,
+stacked "NEW YORK LIFE") is recreated in HTML/CSS from a reference image,
+not an official asset. Swap `core/components.py::logo_mark` (and
+`demo.html`'s `.logo-mark`) for a real `<img>`/`<svg>` once one exists.
+
+## The interface
+
+- **Navigation** (`st.navigation` in `app.py`): Overview, then Phase 1 / 2 /
+  3, with one shared account selector and the credits card in the sidebar.
+- **Hero** on every page: the NYL diagonal-mask motif (Dark Blue field, steep
+  white rule, Blue slab) with a field of squares that shimmers gently.
+- **Verdict banner**: one sentence that answers "did it reconcile?", naming
+  the largest gap when it didn't.
+- **KPI tiles**, a **daily heartbeat** (one square per day, Phase 1) and a
+  **status matrix** (flow codes x days, Phase 2). Status is never color
+  alone — every square carries a glyph (✓ / ✕ / ◆) and a hover tooltip, and
+  the same numbers are in the "Daily results" table.
+- **Run details** tab: which columns resolved, which sign convention was
+  applied, how many rows survived the rules — so a surprising total can be
+  traced without reading code.
+- All motion switches off under the OS "reduce motion" setting.
+
+Everything visual is built by Streamlit-free modules (`core/theme.py`,
+`core/components.py`, `core/insights.py`) and unit-tested; `core/ui.py` is
+only the thin Streamlit glue. Dynamic text from uploaded files (sheet names,
+column headers, error messages) is HTML-escaped before rendering.
+
+## Performance
+
+Streamlit reruns the whole page on every click, so two expensive steps are
+deliberately kept out of the rerun path (measured on a real month, 95K
+Cadency rows):
+
+- **Reading the files (~13s)** is cached on the file's bytes
+  (`st.cache_data`), so it happens once per upload, not once per click.
+- **Building the Excel workbook (~73s)** happens only when you click
+  **Prepare Excel workbook**, once per run, then the Download button reuses
+  it. The pages used to rebuild it on every rerun, which made each click
+  stall for over a minute — the likely real cause of the "going dark"
+  behavior seen on Databricks.
 
 ## Results survive a dropped/reconnected session
 
@@ -130,7 +185,7 @@ under a different account's label.
 
 ## Excel export
 
-Each phase's page has a **Download Excel export** button (`core/export.py`)
+Each phase's page has a **Prepare Excel workbook** / **Download Excel workbook** pair (`core/export.py`)
 that packages the run into a single `.xlsx`, shaped to match the workbook
 Sean already builds by hand for his monthly review — the intent is that
 this can slot into his existing process rather than replace it with
