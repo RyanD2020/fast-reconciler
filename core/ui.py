@@ -58,6 +58,21 @@ def apply_brand_theme() -> None:
             [data-testid="stSidebar"] h1,
             [data-testid="stSidebar"] h2,
             [data-testid="stSidebar"] h3 {{ color: {WHITE} !important; }}
+            [data-testid="stSidebarNav"] {{ background-color: {DARK_BLUE}; }}
+            [data-testid="stSidebarNav"] a, [data-testid="stSidebarNav"] span,
+            [data-testid="stSidebarNav"] li {{
+                color: {WHITE} !important;
+                font-family: {BODY_FONT};
+                border-radius: 0 !important;
+            }}
+            [data-testid="stSidebarNav"] a[aria-current="page"] {{
+                background-color: {BLUE} !important;
+                border-radius: 0 !important;
+            }}
+            [data-testid="stSidebarNav"] a:hover {{
+                background-color: rgba(255,255,255,0.15) !important;
+                border-radius: 0 !important;
+            }}
             .stButton > button, .stDownloadButton > button {{
                 border-radius: 0 !important;
                 box-shadow: none !important;
