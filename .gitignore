@@ -18,6 +18,8 @@ Phase1_Scoping_Question_for_Sean.md
 __pycache__/
 *.pyc
 .pytest_cache/
+venv/
+.venv/
 
 # OS / editor
 .DS_Store
