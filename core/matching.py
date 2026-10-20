@@ -15,7 +15,12 @@ import pandas as pd
 
 from .config import AccountConfig
 from .models import DailyResult, Phase1Result, Phase2Result, ReconStatus
-from .schema import resolve_bank_columns, resolve_sap_columns, resolve_trans_type_column
+from .schema import (
+    resolve_bank_columns,
+    resolve_cadency_amount_column,
+    resolve_sap_columns,
+    resolve_trans_type_column,
+)
 
 
 def run_phase1(
@@ -32,11 +37,17 @@ def run_phase1(
 
     Cadency qualifying rows: Reference 10 == account.fast_reference10_value
         AND trans-type code in account.phase1_trans_type_codes.
-        (Date basis: Post Date.)
+        (Date basis: Post Date. Amount basis: the correctly-signed "TA" /
+        "True Amount" column, not the unsigned "Amount" column -- see
+        schema.py's docstring item 3 -- optionally sign-flipped per
+        account.phase1_cadency_sign_flip, since Cadency and SAP were
+        confirmed to record this population with opposite debit/credit
+        conventions for the same activity.)
     SAP qualifying rows: Text field in account.phase1_sap_text_values.
         (Date basis: Document Date.)
     """
     trans_type_col = resolve_trans_type_column(cadency_df)
+    cadency_amount_col = resolve_cadency_amount_column(cadency_df)
     sap_cols = resolve_sap_columns(sap_df)
 
     cadency_qualifying = cadency_df[
@@ -44,11 +55,13 @@ def run_phase1(
         & (cadency_df[trans_type_col].astype(str).isin(account.phase1_trans_type_codes))
     ].copy()
     cadency_qualifying["Post Date"] = pd.to_datetime(cadency_qualifying["Post Date"]).dt.date
+    sign = -1.0 if account.phase1_cadency_sign_flip else 1.0
+    cadency_qualifying["Phase 1 Amount"] = sign * cadency_qualifying[cadency_amount_col]
 
     sap_qualifying = sap_df[sap_df[sap_cols["text"]].isin(account.phase1_sap_text_values)].copy()
     sap_qualifying["_date"] = pd.to_datetime(sap_qualifying[sap_cols["date"]]).dt.date
 
-    cadency_daily = cadency_qualifying.groupby("Post Date")["Amount"].sum().rename("cadency_total")
+    cadency_daily = cadency_qualifying.groupby("Post Date")["Phase 1 Amount"].sum().rename("cadency_total")
     sap_daily = sap_qualifying.groupby("_date")[sap_cols["amount"]].sum().rename("sap_total")
 
     combined = pd.concat([sap_daily, cadency_daily], axis=1).fillna(0.0).sort_index()
@@ -102,8 +115,16 @@ def run_phase2(
         Post Date otherwise.
     Bank qualifying rows: Flow Code column == rule.flow_code.
         (Date basis: whichever date column resolve_bank_columns finds.)
+
+    Uses the same correctly-signed Cadency amount column as Phase 1 ("TA" /
+    "True Amount", not unsigned "Amount" -- see schema.py docstring item 3).
+    No sign flip is applied here yet, unlike Phase 1: that flip was
+    confirmed against real Phase 1 data specifically, and there's no
+    equivalent confirmation yet for the Phase 2 bank/Cadency relationship.
+    Confirm against real Phase 2 data before assuming either direction.
     """
     trans_type_col = resolve_trans_type_column(cadency_df)
+    cadency_amount_col = resolve_cadency_amount_column(cadency_df)
     bank_cols = resolve_bank_columns(bank_df)
 
     cadency_df = cadency_df.copy()
@@ -139,7 +160,7 @@ def run_phase2(
         bank_qualifying = bank_df[bank_df[bank_cols["flow_code"]] == rule.flow_code].copy()
         bank_qualifying["Flow Code"] = rule.flow_code
 
-        cadency_daily = cadency_qualifying.groupby("_date")["Amount"].sum().rename("cadency_total")
+        cadency_daily = cadency_qualifying.groupby("_date")[cadency_amount_col].sum().rename("cadency_total")
         bank_daily = bank_qualifying.groupby("_date")[bank_cols["amount"]].sum().rename("bank_total")
 
         combined = pd.concat([bank_daily, cadency_daily], axis=1).fillna(0.0).sort_index()

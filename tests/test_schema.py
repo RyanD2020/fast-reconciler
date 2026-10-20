@@ -14,7 +14,12 @@ import unittest
 
 import pandas as pd
 
-from core.schema import resolve_bank_columns, resolve_sap_columns, resolve_trans_type_column
+from core.schema import (
+    resolve_bank_columns,
+    resolve_cadency_amount_column,
+    resolve_sap_columns,
+    resolve_trans_type_column,
+)
 
 
 class TestResolveSapColumns(unittest.TestCase):
@@ -50,6 +55,28 @@ class TestResolveTransTypeColumn(unittest.TestCase):
     def test_resolves_reference_9(self):
         cadency_df = pd.DataFrame(columns=["Reference 10", "Reference 9", "Amount"])
         self.assertEqual(resolve_trans_type_column(cadency_df), "Reference 9")
+
+
+class TestResolveCadencyAmountColumn(unittest.TestCase):
+    def test_prefers_ta_when_both_ta_and_amount_present(self):
+        # Real Cadency exports have both columns simultaneously -- TA
+        # (signed) and Amount (unsigned) -- this must NOT be treated as an
+        # ambiguity error the way other candidate lists are.
+        cadency_df = pd.DataFrame(columns=["Reference 10", "Reference 9", "TA", "Amount", "Post Date"])
+        self.assertEqual(resolve_cadency_amount_column(cadency_df), "TA")
+
+    def test_prefers_true_amount_over_amount(self):
+        cadency_df = pd.DataFrame(columns=["Reference 10", "Reference 9", "True Amount", "Amount"])
+        self.assertEqual(resolve_cadency_amount_column(cadency_df), "True Amount")
+
+    def test_falls_back_to_amount_when_nothing_else_present(self):
+        cadency_df = pd.DataFrame(columns=["Reference 10", "Reference 9", "Amount"])
+        self.assertEqual(resolve_cadency_amount_column(cadency_df), "Amount")
+
+    def test_raises_when_nothing_present(self):
+        cadency_df = pd.DataFrame(columns=["Reference 10", "Reference 9"])
+        with self.assertRaises(ValueError):
+            resolve_cadency_amount_column(cadency_df)
 
 
 class TestResolveBankColumns(unittest.TestCase):

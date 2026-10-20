@@ -26,6 +26,21 @@ Column-name resolution for the raw source files.
    those are intentionally NOT candidates here; "Amount in Local Currency"
    is the one that corresponds to the plain "Amount" the business docs
    describe.
+
+3. CADENCY AMOUNT COLUMN -- CONFIRMED (2026-10-20)
+   Sean reconciled a real day by hand and got an exact match; the tool
+   didn't, by tens of millions of dollars. Root cause: Cadency's "Amount"
+   column is unsigned -- always positive, for both DR and CR rows alike --
+   while "TA" (True Amount, spelled out in full in the idealized
+   Cadency_Export_Guide.xlsx sample) is correctly signed: negative for DR,
+   positive for CR. Summing "Amount" means debits and credits add together
+   instead of netting, which silently inflates the total by roughly 2x
+   whatever the DR side contributed -- a large, confident-looking, totally
+   wrong number instead of a clear error. "Amount" is kept as a last-resort
+   fallback candidate only for the synthetic single-column sample data in
+   sample_data/ and tests/, which was never built to exercise this
+   distinction -- real exports should always have "TA" or "True Amount"
+   and should never fall through to it.
 """
 
 from __future__ import annotations
@@ -33,6 +48,7 @@ from __future__ import annotations
 import pandas as pd
 
 TRANS_TYPE_CODE_CANDIDATES = ["Reference 9", "TR No"]
+CADENCY_AMOUNT_CANDIDATES = ["TA", "True Amount", "Amount"]
 
 SAP_TEXT_COLUMN_CANDIDATES = ["Text", "SAP Text", "TEXT"]
 SAP_DATE_COLUMN_CANDIDATES = ["Document Date", "Doc Date"]
@@ -64,6 +80,27 @@ def resolve_trans_type_column(cadency_df: pd.DataFrame) -> str:
     (Reference 9, or "TR No" as a fallback) -- see module docstring, item 1.
     """
     return _resolve_column(cadency_df, TRANS_TYPE_CODE_CANDIDATES, "Cadency trans-type code")
+
+
+def resolve_cadency_amount_column(cadency_df: pd.DataFrame) -> str:
+    """Return whichever candidate column holds the correctly-signed Cadency
+    amount, preferring the first match in CADENCY_AMOUNT_CANDIDATES order
+    (TA > True Amount > Amount) -- see module docstring, item 3.
+
+    Unlike _resolve_column, this does NOT treat multiple candidates being
+    present as an ambiguity error: real Cadency exports legitimately have
+    both "TA" (signed) and "Amount" (unsigned) as distinct columns side by
+    side, so the correct behavior is to prefer the signed one, not flag the
+    file as ambiguous.
+    """
+    for candidate in CADENCY_AMOUNT_CANDIDATES:
+        if candidate in cadency_df.columns:
+            return candidate
+    raise ValueError(
+        "Could not find a Cadency amount column in this file. "
+        f"Looked for (in priority order): {CADENCY_AMOUNT_CANDIDATES}. "
+        f"Columns present: {list(cadency_df.columns)}"
+    )
 
 
 def resolve_sap_columns(sap_df: pd.DataFrame) -> dict:

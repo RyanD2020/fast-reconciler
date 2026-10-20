@@ -24,6 +24,10 @@ class TestPhase1Matching(unittest.TestCase):
         self.account = get_account("19803075")
 
     def test_matching_day_reconciles(self):
+        # Account 19803075 has phase1_cadency_sign_flip=True (confirmed
+        # 2026-10-20: SAP and Cadency record this population with opposite
+        # signs for the same activity), so qualifying Cadency rows end up
+        # negated relative to their raw (unsigned, fallback "Amount") value.
         cadency = pd.DataFrame(
             {
                 "Reference 10": ["FAST", "FAST", "GDS"],
@@ -36,7 +40,7 @@ class TestPhase1Matching(unittest.TestCase):
             {
                 "Text": ["Annuity Payment", "Write Off", "Something Else"],
                 "Document Date": [datetime(2026, 7, 1)] * 3,
-                "Amount": [100.0, 50.0, 12345.0],  # last row excluded: Text not qualifying
+                "Amount": [-100.0, -50.0, 12345.0],  # last row excluded: Text not qualifying
             }
         )
         result = run_phase1(cadency, sap, self.account)
@@ -45,8 +49,8 @@ class TestPhase1Matching(unittest.TestCase):
         day = result.daily_results[0]
         self.assertEqual(day.status, ReconStatus.RECONCILED)
         self.assertEqual(day.difference, 0.0)
-        self.assertEqual(day.source_a_total, 150.0)
-        self.assertEqual(day.source_b_total, 150.0)
+        self.assertEqual(day.source_a_total, -150.0)
+        self.assertEqual(day.source_b_total, -150.0)
 
     def test_mismatched_day_does_not_reconcile(self):
         cadency = pd.DataFrame(
@@ -61,13 +65,13 @@ class TestPhase1Matching(unittest.TestCase):
             {
                 "Text": ["Annuity Payment"],
                 "Document Date": [datetime(2026, 7, 2)],
-                "Amount": [150.0],
+                "Amount": [-150.0],
             }
         )
         result = run_phase1(cadency, sap, self.account)
         day = result.daily_results[0]
         self.assertEqual(day.status, ReconStatus.DOES_NOT_RECONCILE)
-        self.assertEqual(day.difference, 50.0)
+        self.assertEqual(day.difference, -50.0)
 
     def test_non_qualifying_trans_type_excluded(self):
         cadency = pd.DataFrame(
@@ -82,12 +86,41 @@ class TestPhase1Matching(unittest.TestCase):
             {
                 "Text": ["Annuity Payment"],
                 "Document Date": [datetime(2026, 7, 3)],
-                "Amount": [100.0],
+                "Amount": [-100.0],
             }
         )
         result = run_phase1(cadency, sap, self.account)
         day = result.daily_results[0]
-        self.assertEqual(day.source_b_total, 100.0)  # CHKD row correctly excluded
+        self.assertEqual(day.source_b_total, -100.0)  # CHKD row correctly excluded
+        self.assertEqual(day.status, ReconStatus.RECONCILED)
+
+    def test_cadency_sign_flip_uses_true_amount_not_unsigned_amount(self):
+        # Guards the 2026-10-20 bug: Cadency's "Amount" is unsigned (always
+        # positive, confirmed against real data), while "TA" (True Amount)
+        # is correctly signed (negative for DR, positive for CR). Using
+        # "Amount" instead of "TA" means debits and credits add together
+        # instead of netting -- a large, confident, wrong total instead of
+        # the correct one. Sean reconciled the real data by hand and got an
+        # exact match; this is the fix that makes the tool agree with him.
+        cadency = pd.DataFrame(
+            {
+                "Reference 10": ["FAST", "FAST"],
+                "Reference 9": ["5801", "5801"],
+                "Amount": [100.0, 50.0],  # unsigned -- the old, buggy sum would be 150.0
+                "TA": [-100.0, 50.0],  # correctly signed -- true sum is -50.0
+                "Post Date": [datetime(2026, 7, 1)] * 2,
+            }
+        )
+        sap = pd.DataFrame(
+            {
+                "Text": ["Annuity Payment"],
+                "Document Date": [datetime(2026, 7, 1)],
+                "Amount": [50.0],  # matches TA's -50.0 once sign-flipped for this account
+            }
+        )
+        result = run_phase1(cadency, sap, self.account)
+        day = result.daily_results[0]
+        self.assertEqual(day.source_b_total, 50.0)
         self.assertEqual(day.status, ReconStatus.RECONCILED)
 
     def test_ambiguous_trans_type_column_raises(self):

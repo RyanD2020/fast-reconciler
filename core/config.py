@@ -59,6 +59,15 @@ class AccountConfig:
         "Write Off",
         "Premium Remittance - Overpayment Recoupment",
     )
+    # Confirmed 2026-10-20 against real data: Cadency's True Amount (TA) and
+    # SAP's Amount in Local Currency record this Phase 1 population with
+    # opposite signs for the same economic activity (two independent
+    # systems, two different debit/credit conventions) -- flipping
+    # Cadency's sign is what makes the daily totals match exactly. This is
+    # recorded per-account rather than hardcoded in matching.py because
+    # there's no evidence yet that every account's Phase 1 population will
+    # need the same flip.
+    phase1_cadency_sign_flip: bool = False
 
     # --- Phase 2: Treasury / bank Flow Code matching (stub) ---
     gds_reference10_value: str = "GDS"
@@ -78,6 +87,7 @@ ACCOUNTS: dict[str, AccountConfig] = {
     "19803075": AccountConfig(
         account_number="19803075",
         display_name="FAST Pension Annuity Clearing Account (19803075)",
+        phase1_cadency_sign_flip=True,
         flow_code_rules=(
             FlowCodeRule("+301", "FAST", "CHKD", notes="Check deposits"),
             FlowCodeRule("-466", "GDS", "5801", use_effective_date=True, reference7_equals="E",
