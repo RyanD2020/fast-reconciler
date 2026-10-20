@@ -69,6 +69,36 @@ def source_input(label: str, key: str) -> pd.DataFrame | None:
     return df
 
 
+def run_with_persistence(label: str, state_key: str, ready: bool, account_number: str, compute):
+    """Runs compute() when the button is clicked and stores the result in
+    st.session_state, so it survives a Streamlit rerun -- e.g. a dropped and
+    reconnected websocket after the app sits idle for a while (this is what
+    was causing results to disappear and require re-clicking Run: by
+    default, st.button() only returns True for the one script run the click
+    happened in, so any later rerun -- a reconnect, or even clicking the
+    Download button -- would otherwise wipe the results with nothing to
+    show).
+
+    Returns the persisted value for the currently selected account, or None
+    if nothing has been run yet (or the account was switched since the last
+    run, which deliberately invalidates the old result rather than showing
+    a different account's numbers under the current selection).
+    """
+    if st.button(label, type="primary", disabled=not ready):
+        try:
+            value = compute()
+        except Exception as e:
+            st.error(f"{label} could not run: {e}")
+            st.session_state.pop(state_key, None)
+        else:
+            st.session_state[state_key] = {"value": value, "account_number": account_number}
+
+    state = st.session_state.get(state_key)
+    if state is not None and state["account_number"] == account_number:
+        return state["value"]
+    return None
+
+
 def render_results(results_df: pd.DataFrame) -> None:
     """Color-codes and displays a DailyResult-derived results dataframe,
     and shows a one-line summary of DOES NOT RECONCILE / MANUAL REVIEW counts.

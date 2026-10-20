@@ -88,6 +88,19 @@ options. `demo.html` has the same picker (upload it there in either the
 Phase 1 or Phase 2 tab to see it live in the browser mockup, no Streamlit
 needed).
 
+## Results survive a dropped/reconnected session
+
+Both Phase 1 and Phase 2 persist their results in `st.session_state`
+(`core/ui.py::run_with_persistence`) rather than only displaying them for
+the one script run where the Run button was clicked. Without this,
+Streamlit's rerun model meant results would vanish and require re-clicking
+Run after *any* rerun — including a websocket reconnect (e.g. Databricks
+Apps' proxy dropping an idle connection during a long review session) or
+even just clicking the Download Excel button, since every Streamlit button
+triggers a full script rerun. Results are keyed to the selected account, so
+switching accounts clears the old ones rather than showing stale numbers
+under a different account's label.
+
 ## Excel export
 
 Each phase's page has a **Download Excel export** button (`core/export.py`)

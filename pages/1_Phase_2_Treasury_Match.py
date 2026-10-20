@@ -6,7 +6,7 @@ import streamlit as st
 from core.config import ACCOUNTS
 from core.export import export_workbook
 from core.matching import run_phase2
-from core.ui import render_results, source_input
+from core.ui import render_results, run_with_persistence, source_input
 
 st.title("Phase 2 - Treasury / Bank Flow Code Matching")
 st.caption(
@@ -40,40 +40,44 @@ st.divider()
 
 ready = cadency_df is not None and bank_df is not None
 
-if st.button("Run Phase 2 Reconciliation", type="primary", disabled=not ready):
-    try:
-        result = run_phase2(cadency_df, bank_df, account)
-    except Exception as e:
-        st.error(f"Phase 2 could not run: {e}")
+persisted = run_with_persistence(
+    "Run Phase 2 Reconciliation",
+    "phase2_state",
+    ready,
+    account.account_number,
+    lambda: (run_phase2(cadency_df, bank_df, account), cadency_df, bank_df),
+)
+
+if persisted is not None:
+    result, raw_cadency_df, raw_bank_df = persisted
+    st.subheader("Phase 2 Results - Cadency vs. Bank, by Flow Code")
+    results_df = result.as_dataframe()
+    if results_df.empty:
+        st.warning("No qualifying rows found for any Phase 2 Flow Code in the files provided.")
     else:
-        st.subheader("Phase 2 Results - Cadency vs. Bank, by Flow Code")
-        results_df = result.as_dataframe()
-        if results_df.empty:
-            st.warning("No qualifying rows found for any Phase 2 Flow Code in the files provided.")
-        else:
-            render_results(results_df)
+        render_results(results_df)
 
-        with st.expander("Qualifying bank detail (drill-down)"):
-            st.dataframe(result.bank_detail, use_container_width=True)
-        with st.expander("Qualifying Cadency detail (drill-down)"):
-            st.dataframe(result.cadency_detail, use_container_width=True)
+    with st.expander("Qualifying bank detail (drill-down)"):
+        st.dataframe(result.bank_detail, use_container_width=True)
+    with st.expander("Qualifying Cadency detail (drill-down)"):
+        st.dataframe(result.cadency_detail, use_container_width=True)
 
-        if not results_df.empty:
-            excel_bytes = export_workbook(
-                [
-                    ("Phase 2 Results", results_df),
-                    ("Cadency - Phase 2 Qualifying", result.cadency_detail),
-                    ("Bank - Phase 2 Qualifying", result.bank_detail),
-                    ("Cadency - Raw", cadency_df),
-                    ("Bank - Raw", bank_df),
-                ]
-            )
-            st.download_button(
-                "Download Excel export",
-                data=excel_bytes,
-                file_name=f"phase2_reconciliation_{account.account_number}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+    if not results_df.empty:
+        excel_bytes = export_workbook(
+            [
+                ("Phase 2 Results", results_df),
+                ("Cadency - Phase 2 Qualifying", result.cadency_detail),
+                ("Bank - Phase 2 Qualifying", result.bank_detail),
+                ("Cadency - Raw", raw_cadency_df),
+                ("Bank - Raw", raw_bank_df),
+            ]
+        )
+        st.download_button(
+            "Download Excel export",
+            data=excel_bytes,
+            file_name=f"phase2_reconciliation_{account.account_number}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 elif not ready:
     st.info(
         "Load both a Cadency export and a Treasury/bank statement export above, "

@@ -15,7 +15,7 @@ import streamlit as st
 from core.config import ACCOUNTS, get_account
 from core.export import export_workbook
 from core.matching import run_phase1
-from core.ui import render_results, source_input
+from core.ui import render_results, run_with_persistence, source_input
 
 st.set_page_config(page_title="FAST Reconciler", layout="wide")
 
@@ -52,35 +52,39 @@ st.divider()
 
 ready = cadency_df is not None and sap_df is not None
 
-if st.button("Run Phase 1 Reconciliation", type="primary", disabled=not ready):
-    try:
-        result = run_phase1(cadency_df, sap_df, account)
-    except Exception as e:
-        st.error(f"Phase 1 could not run: {e}")
-    else:
-        st.subheader("Phase 1 Results - FAST vs. SAP")
-        results_df = result.as_dataframe()
-        render_results(results_df)
+persisted = run_with_persistence(
+    "Run Phase 1 Reconciliation",
+    "phase1_state",
+    ready,
+    account.account_number,
+    lambda: (run_phase1(cadency_df, sap_df, account), cadency_df, sap_df),
+)
 
-        with st.expander("Qualifying SAP detail (drill-down)"):
-            st.dataframe(result.sap_detail, use_container_width=True)
-        with st.expander("Qualifying Cadency detail (drill-down)"):
-            st.dataframe(result.cadency_detail, use_container_width=True)
+if persisted is not None:
+    result, raw_cadency_df, raw_sap_df = persisted
+    st.subheader("Phase 1 Results - FAST vs. SAP")
+    results_df = result.as_dataframe()
+    render_results(results_df)
 
-        excel_bytes = export_workbook(
-            [
-                ("Phase 1 Results", results_df),
-                ("Cadency - Phase 1 Qualifying", result.cadency_detail),
-                ("SAP - Phase 1 Qualifying", result.sap_detail),
-                ("Cadency - Raw", cadency_df),
-                ("SAP - Raw", sap_df),
-            ]
-        )
-        st.download_button(
-            "Download Excel export",
-            data=excel_bytes,
-            file_name=f"phase1_reconciliation_{account.account_number}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
+    with st.expander("Qualifying SAP detail (drill-down)"):
+        st.dataframe(result.sap_detail, use_container_width=True)
+    with st.expander("Qualifying Cadency detail (drill-down)"):
+        st.dataframe(result.cadency_detail, use_container_width=True)
+
+    excel_bytes = export_workbook(
+        [
+            ("Phase 1 Results", results_df),
+            ("Cadency - Phase 1 Qualifying", result.cadency_detail),
+            ("SAP - Phase 1 Qualifying", result.sap_detail),
+            ("Cadency - Raw", raw_cadency_df),
+            ("SAP - Raw", raw_sap_df),
+        ]
+    )
+    st.download_button(
+        "Download Excel export",
+        data=excel_bytes,
+        file_name=f"phase1_reconciliation_{account.account_number}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 elif not ready:
     st.info("Load both a Cadency export and a SAP export above, then run the reconciliation.")
