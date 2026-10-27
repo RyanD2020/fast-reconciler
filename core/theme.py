@@ -63,7 +63,9 @@ h1, h2, h3, h4 { font-family: var(--nyl-serif) !important; color: var(--nyl-dark
 [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 { color: var(--nyl-white) !important; }
 [data-testid="stSidebar"] label p { font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 11px !important; color: var(--nyl-ink-on-dark) !important; }
 [data-testid="stSidebar"] [data-baseweb="select"] > div { border-radius: 0 !important; border: 0 !important; }
-[data-testid="stSidebarNav"] * { color: var(--nyl-white) !important; font-family: var(--nyl-sans); }
+[data-testid="stSidebarNav"] * { color: var(--nyl-white) !important; }
+/* Page icons are icon-font ligatures ("dashboard" -> glyph): forcing the body font onto them prints the raw word over the page title. */
+[data-testid="stSidebarNav"] *:not([data-testid="stIconMaterial"]) { font-family: var(--nyl-sans); }
 [data-testid="stSidebarNav"] a { border-radius: 0 !important; border-left: 3px solid transparent; transition: background-color .15s ease, border-color .15s ease; }
 [data-testid="stSidebarNav"] a:hover { background: rgba(255, 255, 255, .08) !important; border-left-color: rgba(255, 255, 255, .4); }
 [data-testid="stSidebarNav"] a[aria-current="page"] { background: rgba(255, 255, 255, .12) !important; border-left-color: var(--nyl-blue); }

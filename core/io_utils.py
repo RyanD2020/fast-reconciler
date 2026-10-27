@@ -70,7 +70,28 @@ def load_tabular(
     source, filename = _resolve_source(uploaded_file, volume_path)
     if hasattr(source, "seek"):
         source.seek(0)
-    return _read_by_extension(source, filename, sheet_name)
+    return _stringify_oversized_ints(_read_by_extension(source, filename, sheet_name))
+
+
+_INT64_MIN, _INT64_MAX = -(2**63), 2**63 - 1
+
+
+def _stringify_oversized_ints(df: pd.DataFrame) -> pd.DataFrame:
+    """Turn integers too big for int64 into text.
+
+    Cadency's Reference 1 is a transaction ID, but Excel stores the all-digit
+    ones as numbers (shown as e.g. 3.4511E+24), and openpyxl hands those back
+    as Python ints far past int64 -- which crashed Streamlit's table display
+    with "OverflowError: Python int too large to convert to C long"
+    (2026-10-27, Phase 2 Cadency detail). They're identifiers, never summed,
+    so text is the right type for them anyway. Only object columns can hold
+    such values; everything else is left exactly as read.
+    """
+    for col in df.columns[df.dtypes == object]:
+        oversized = df[col].map(lambda v: isinstance(v, int) and not _INT64_MIN <= v <= _INT64_MAX)
+        if oversized.any():
+            df[col] = df[col].where(~oversized, df[col].astype(str))
+    return df
 
 
 def _read_by_extension(source, filename: str, sheet_name) -> pd.DataFrame:
