@@ -56,6 +56,34 @@ class TestPhase2Matching(unittest.TestCase):
         day = result.daily_results[0]
         self.assertEqual(day.status, ReconStatus.DOES_NOT_RECONCILE)
         self.assertEqual(day.difference, -50.0)
+        # Both files cover the day, so nothing explains it: a genuine break.
+        self.assertEqual(day.note, "")
+        self.assertNotIn("Note", result.as_dataframe().columns)
+
+    def test_466_coverage_gaps_are_noted_not_reconciled(self):
+        # 9/1 test data: EFTs posted 9/1 settle 9/3. The 9/1 bank -466 belongs
+        # to EFTs posted before 9/1 (not in the file), and the 9/3 Cadency
+        # side has no Treasury file loaded. Both stay DOES NOT RECONCILE,
+        # each with a note saying why.
+        cadency = pd.DataFrame(
+            {
+                "Reference 10": ["GDS"],
+                "Reference 9": ["5801"],
+                "Reference 7": ["E"],
+                "TA": [-5544.16],
+                "Post Date": [datetime(2026, 9, 1)],
+                "Effective Date": [datetime(2026, 9, 3)],
+            }
+        )
+        bank = pd.DataFrame({"Flow Code": ["-466"], "Date": [datetime(2026, 9, 1)], "Amount": [-13485.27]})
+        result = run_phase2(cadency, bank, self.account)
+        by_date = {r.recon_date.day: r for r in result.daily_results}
+
+        self.assertEqual(by_date[1].status, ReconStatus.DOES_NOT_RECONCILE)
+        self.assertIn("posts up to 2 days earlier", by_date[1].note)
+        self.assertEqual(by_date[3].status, ReconStatus.DOES_NOT_RECONCILE)
+        self.assertIn("Outside the Treasury file's dates", by_date[3].note)
+        self.assertIn("Note", result.as_dataframe().columns)
 
     def test_466_uses_effective_date_not_post_date(self):
         # Post Date 8/4, Effective Date 8/6 - bank activity settles 8/6.
@@ -143,6 +171,64 @@ class TestPhase2Matching(unittest.TestCase):
         result = run_phase2(cadency, bank, self.account)
         day = result.daily_results[0]
         self.assertEqual(day.status, ReconStatus.MANUAL_REVIEW)
+
+    def test_gdsck_i_includes_gds_dedu_issued_checks(self):
+        # 9/1 test data: Treasury -GDSCK_I -58,430.66 = GDS/5801/I
+        # -36,878.42 + GDS/DEDU/I -21,552.24. 5801 alone left it short.
+        cadency = pd.DataFrame(
+            {
+                "Reference 10": ["GDS", "GDS"],
+                "Reference 9": [5801, "DEDU"],
+                "Reference 7": ["I", "I"],
+                "TA": [-36878.42, -21552.24],
+                "Post Date": [datetime(2026, 9, 1)] * 2,
+                "Effective Date": [datetime(2026, 9, 1)] * 2,
+            }
+        )
+        bank = pd.DataFrame({"Flow Code": ["-GDSCK_I"], "Date": [datetime(2026, 9, 1)], "Amount": [-58430.66]})
+        day = run_phase2(cadency, bank, self.account).daily_results[0]
+        self.assertEqual(day.source_b_total, -58430.66)
+        self.assertEqual(day.status, ReconStatus.RECONCILED)
+
+    def test_166_reclaim_credit_is_judged_and_surfaces_as_exception(self):
+        # +166 needs Phase 3's Account 187 netting before it can tie, but it
+        # must still appear in Phase 2 rather than drop off the bank side.
+        cadency = pd.DataFrame(
+            {
+                "Reference 10": ["FAST"],
+                "Reference 9": ["RCCR"],
+                "Reference 7": [""],
+                "TA": [12720.50],
+                "Post Date": [datetime(2026, 9, 1)],
+                "Effective Date": [datetime(2026, 8, 24)],
+            }
+        )
+        bank = pd.DataFrame({"Flow Code": ["+166"], "Date": [datetime(2026, 9, 1)], "Amount": [10440.67]})
+        day = run_phase2(cadency, bank, self.account).daily_results[0]
+        self.assertEqual(day.population, "Phase 2 - +166")
+        self.assertEqual(day.status, ReconStatus.DOES_NOT_RECONCILE)
+        self.assertEqual(day.difference, -2279.83)
+        self.assertIn("legacy Account 187", day.note)
+
+    def test_headerless_treasury_export_runs(self):
+        cadency = pd.DataFrame(
+            {
+                "Reference 10": ["FAST"],
+                "Reference 9": ["CHKD"],
+                "Reference 7": [""],
+                "TA": [430.12],
+                "Post Date": [datetime(2026, 9, 1)],
+                "Effective Date": [datetime(2026, 9, 1)],
+            }
+        )
+        bank = pd.DataFrame(
+            [[datetime(2026, 9, 1), "0019803075", None, 430.12, 1]],
+            columns=[datetime(2026, 9, 1), "WELL1711", "0019803075", 430.12, "+301"],
+        )
+        day = run_phase2(cadency, bank, self.account).daily_results[0]
+        self.assertEqual(day.population, "Phase 2 - +301")
+        self.assertEqual(day.source_a_total, 430.12)
+        self.assertEqual(day.status, ReconStatus.RECONCILED)
 
     def test_each_flow_code_independent_one_failure_does_not_affect_others(self):
         cadency = pd.DataFrame(

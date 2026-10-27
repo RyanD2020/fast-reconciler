@@ -303,7 +303,7 @@ def _tooltip(r: DailyResult) -> str:
     return (
         f"{r.recon_date:%a} {short_date(r.recon_date)} · {r.status.value} · "
         f"{r.source_a_label} {money(r.source_a_total)} · {r.source_b_label} {money(r.source_b_total)} · "
-        f"difference {money(r.difference)}"
+        f"difference {money(r.difference)}" + (f" · {r.note}" if r.note else "")
     )
 
 
@@ -340,7 +340,7 @@ def heartbeat(daily_results: list[DailyResult]) -> str:
 
 
 def _rule_label(rule: FlowCodeRule) -> str:
-    detail = f"{rule.cadency_ref10} / {rule.cadency_trans_type_code}"
+    detail = f"{rule.cadency_ref10} / {' + '.join(rule.cadency_trans_type_codes)}"
     if rule.reference7_equals:
         detail += f" / Ref 7 = {rule.reference7_equals}"
     return detail

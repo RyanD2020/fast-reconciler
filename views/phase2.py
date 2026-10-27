@@ -6,6 +6,7 @@ import streamlit as st
 from core import components as c
 from core.insights import phase2_run_facts, summarize
 from core.matching import run_phase2
+from core.schema import normalize_bank_export
 from core.ui import (
     current_account,
     render,
@@ -16,7 +17,7 @@ from core.ui import (
 )
 
 account = current_account()
-rules = [r for r in account.flow_code_rules if r.phase == 2]
+rules = list(account.flow_code_rules)
 
 render(
     c.hero(
@@ -32,6 +33,7 @@ render(
             ("-466 outgoing EFT", "Matched on Effective Date"),
             ("GDS checks", "Split by Reference 7: C / S / I"),
             ("-495 / +195 wires", "Always manual review"),
+            ("+166 / -468 reclaims", "Judged before Phase 3 netting - expected exceptions"),
             ("Phase 2 sign", "As exported - not yet confirmed"),
         ],
         trusted_hint_html="Flow-code rules live in <code>core/config.py</code>.",
@@ -46,6 +48,17 @@ with left:
     cadency_df = source_input("Cadency export", "phase2_cadency", "A", "FAST and GDS activity - the rules route each row to its flow code.")
 with right:
     bank_df = source_input("Treasury / bank statement", "phase2_bank", "B", "One row per flow-code movement.")
+    if bank_df is not None:
+        normalized = normalize_bank_export(bank_df)
+        if normalized is not bank_df:
+            render(
+                c.callout(
+                    f"No header row - read as Date / Bank ID / Account / Amount / Flow Code. "
+                    f"{len(normalized):,} flow-code rows kept, {len(bank_df) + 1 - len(normalized):,} total row(s) dropped.",
+                    tone="info",
+                )
+            )
+        bank_df = normalized
 
 render(c.step("02", "Reconcile", "Each flow code, each day, judged independently."))
 ready = cadency_df is not None and bank_df is not None

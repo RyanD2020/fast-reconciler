@@ -23,10 +23,12 @@ from dataclasses import dataclass, field
 class FlowCodeRule:
     """One bank-Flow-Code -> Cadency-population rule.
 
-    phase 2 rules (Treasury/bank cash matching) are consumed by
-    core.matching.run_phase2. phase 3 rules (+166/-468 reclaim netting
-    against legacy Accounts 187/147) are still captured as data only --
-    run_phase3 is a stub.
+    Every rule is judged by core.matching.run_phase2, so every Flow Code
+    on the bank statement gets a result. phase 3 rules (+166/-468 reclaim
+    netting against legacy Accounts 187/147) are judged there directly,
+    without the netting -- they're expected NOT to reconcile until
+    run_phase3 (still a stub) nets them; Sean's 9/1 test data relies on
+    +166 surfacing as an exception rather than disappearing.
 
     reference7_equals exists because GDS/5801 activity covers more than one
     Flow Code, each identified by its own Reference 7 tag (confirmed with
@@ -37,7 +39,7 @@ class FlowCodeRule:
 
     flow_code: str
     cadency_ref10: str  # "FAST" or "GDS"
-    cadency_trans_type_code: str  # expected value in the trans-type column, e.g. "CHKD", "BRCR", "5801"
+    cadency_trans_type_codes: tuple[str, ...]  # accepted values in the trans-type column, e.g. ("CHKD",), ("5801", "DEDU")
     phase: int = 2
     use_effective_date: bool = False
     manual_review: bool = False
@@ -89,21 +91,23 @@ ACCOUNTS: dict[str, AccountConfig] = {
         display_name="FAST Pension Annuity Clearing Account (19803075)",
         phase1_cadency_sign_flip=True,
         flow_code_rules=(
-            FlowCodeRule("+301", "FAST", "CHKD", notes="Check deposits"),
-            FlowCodeRule("-466", "GDS", "5801", use_effective_date=True, reference7_equals="E",
+            FlowCodeRule("+301", "FAST", ("CHKD",), notes="Check deposits"),
+            FlowCodeRule("-466", "GDS", ("5801",), use_effective_date=True, reference7_equals="E",
                          notes="Outgoing EFT - use Effective Date, not Post Date (settlement delay); "
                                "EFT activity is tagged Reference 7 = E"),
-            FlowCodeRule("+168", "FAST", "BRCR", notes="Bank return credits / returned EFT"),
-            FlowCodeRule("+GDSCK_C", "GDS", "5801", reference7_equals="C", notes="Cancelled GDS check"),
-            FlowCodeRule("+GDSCK_S", "GDS", "5801", reference7_equals="S", notes="Stopped GDS check"),
-            FlowCodeRule("-GDSCK_I", "GDS", "5801", reference7_equals="I", notes="Issued GDS check"),
-            FlowCodeRule("-495", "FAST", "WIRE", manual_review=True,
+            FlowCodeRule("+168", "FAST", ("BRCR",), notes="Bank return credits / returned EFT"),
+            FlowCodeRule("+GDSCK_C", "GDS", ("5801",), reference7_equals="C", notes="Cancelled GDS check"),
+            FlowCodeRule("+GDSCK_S", "GDS", ("5801",), reference7_equals="S", notes="Stopped GDS check"),
+            FlowCodeRule("-GDSCK_I", "GDS", ("5801", "DEDU"), reference7_equals="I",
+                         notes="Issued GDS check - GDS deduction checks (DEDU) are issued checks too; "
+                               "9/1 Treasury -GDSCK_I only ties when they're included"),
+            FlowCodeRule("-495", "FAST", ("WIRE",), manual_review=True,
                          notes="Outgoing wire - manual Ad Hoc SJE until FAST generates WIRE transactions"),
-            FlowCodeRule("+195", "FAST", "INCO", manual_review=True,
+            FlowCodeRule("+195", "FAST", ("INCO",), manual_review=True,
                          notes="Incoming wire - manual Ad Hoc SJE until FAST generates INCO transactions"),
-            FlowCodeRule("+166", "FAST", "RCCR", phase=3,
+            FlowCodeRule("+166", "FAST", ("RCCR",), phase=3,
                          notes="Reclaim Credit - net against Account 187 before validating"),
-            FlowCodeRule("-468", "FAST", "RCDB", phase=3,
+            FlowCodeRule("-468", "FAST", ("RCDB",), phase=3,
                          notes="Reclaim Debit - net against Account 147 before validating"),
         ),
     ),

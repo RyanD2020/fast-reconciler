@@ -96,7 +96,7 @@ class TestVisuals(unittest.TestCase):
         self.assertIn("✓", html)  # status is never color-only
 
     def test_status_matrix_marks_days_without_activity(self):
-        rules = [r for r in get_account("19803075").flow_code_rules if r.phase == 2]
+        rules = list(get_account("19803075").flow_code_rules)
         html = c.status_matrix([_r(3, 0, ReconStatus.RECONCILED, "Phase 2 - +301")], rules)
         legend = c.legend()  # the legend carries one sample square of each status
         self.assertEqual(html.count("nyl-sq is-ok") - legend.count("nyl-sq is-ok"), 1)

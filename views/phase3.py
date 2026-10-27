@@ -8,7 +8,7 @@ from core import components as c
 from core.ui import current_account, render
 
 account = current_account()
-rules = {r.cadency_trans_type_code: r for r in account.flow_code_rules if r.phase == 3}
+rules = {code: r for r in account.flow_code_rules if r.phase == 3 for code in r.cadency_trans_type_codes}
 
 render(
     c.hero(

@@ -41,9 +41,23 @@ Column-name resolution for the raw source files.
    sample_data/ and tests/, which was never built to exercise this
    distinction -- real exports should always have "TA" or "True Amount"
    and should never fall through to it.
+
+4. TREASURY / BANK EXPORT LAYOUT -- CONFIRMED (2026-10-27)
+   The real Treasury export (9.1 Treasury.xlsx, and the same blocks pasted
+   into Sean's July 2026 working file) has NO header row: every row is
+   Date | Bank ID | Account | Amount | Flow Code, optionally followed by
+   blank / free-text note columns, and ends with a footer row holding the
+   account's net total and a row count in the Flow Code position. Read
+   with a header, pandas turns the first transaction into column names and
+   nothing resolves. normalize_bank_export puts that row back as data,
+   names the columns positionally, and drops anything whose Flow Code
+   isn't a +/- code (the footer). Files that do carry a "Flow Code" header
+   pass through unchanged.
 """
 
 from __future__ import annotations
+
+import re
 
 import pandas as pd
 
@@ -57,6 +71,43 @@ SAP_AMOUNT_COLUMN_CANDIDATES = ["Amount", "Entry Amount", "Local Currency Amount
 BANK_FLOW_CODE_COLUMN_CANDIDATES = ["Flow Code", "Bank Flow Code"]
 BANK_DATE_COLUMN_CANDIDATES = ["Date", "Value Date", "Post Date"]
 BANK_AMOUNT_COLUMN_CANDIDATES = ["Amount", "Net Amount"]
+
+BANK_HEADERLESS_COLUMNS = ["Date", "Bank ID", "Account", "Amount", "Flow Code"]
+_FLOW_CODE_RE = re.compile(r"^[+-][A-Za-z0-9_]+$")
+
+
+def _is_flow_code(value) -> bool:
+    return isinstance(value, str) and bool(_FLOW_CODE_RE.match(value.strip()))
+
+
+def normalize_bank_export(bank_df: pd.DataFrame) -> pd.DataFrame:
+    """Return the bank export with named columns and only flow-code rows --
+    see module docstring, item 4. Leaves the frame alone if it already has
+    a recognised Flow Code header, or doesn't look like the headerless
+    layout either (so resolve_bank_columns still raises its normal error).
+    """
+    if any(c in bank_df.columns for c in BANK_FLOW_CODE_COLUMN_CANDIDATES):
+        return bank_df
+    n = len(BANK_HEADERLESS_COLUMNS)
+    if len(bank_df.columns) < n or not _is_flow_code(bank_df.columns[n - 1]):
+        return bank_df
+
+    first_row = [None if str(c).startswith("Unnamed:") else c for c in bank_df.columns]
+    df = pd.concat([pd.DataFrame([first_row], columns=bank_df.columns), bank_df], ignore_index=True)
+    df.columns = BANK_HEADERLESS_COLUMNS + [f"Column {i + 1}" for i in range(n, len(df.columns))]
+    df = df[df["Flow Code"].map(_is_flow_code)].reset_index(drop=True)
+    df["Flow Code"] = df["Flow Code"].str.strip()
+    df["Amount"] = pd.to_numeric(df["Amount"])
+    df["Account"] = normalize_code(df["Account"]).str.lstrip("0")
+    return df
+
+
+def normalize_code(series: pd.Series) -> pd.Series:
+    """Trans-type / Reference 7 codes as clean strings. Excel hands numeric
+    codes back as int or float depending on how the cell was saved, so the
+    same 5801 can arrive as "5801" or "5801.0" -- either has to match.
+    """
+    return series.fillna("").astype(str).str.strip().str.removesuffix(".0")
 
 
 def _resolve_column(df: pd.DataFrame, candidates: list[str], what: str) -> str:
@@ -116,13 +167,8 @@ def resolve_sap_columns(sap_df: pd.DataFrame) -> dict:
 
 def resolve_bank_columns(bank_df: pd.DataFrame) -> dict:
     """Return {'flow_code': ..., 'date': ..., 'amount': ...} column names for
-    the Treasury/bank statement export.
-
-    No real bank/treasury export sample has been provided -- these are a
-    working assumption based on how Flow Code activity is described in the
-    business docs and tracked in Sean's July 2026 working file, and should
-    be confirmed against a real export before Phase 2 is trusted in
-    production.
+    the Treasury/bank statement export. The real export is headerless --
+    run it through normalize_bank_export first (module docstring, item 4).
     """
     return {
         "flow_code": _resolve_column(bank_df, BANK_FLOW_CODE_COLUMN_CANDIDATES, "Bank Flow Code"),
