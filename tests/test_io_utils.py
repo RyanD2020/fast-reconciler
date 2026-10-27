@@ -57,5 +57,16 @@ class TestListSheetNames(unittest.TestCase):
         self.assertEqual(list(df["y"]), [3, 4])
 
 
+class TestOversizedIntegers(unittest.TestCase):
+    def test_excel_number_ids_past_int64_load_as_text(self):
+        # 9.1 Cadency.xlsx Reference 1: hex IDs as text, all-digit IDs stored
+        # by Excel as numbers (3.4511E+24). Those crashed st.dataframe.
+        big = 3451100080036060143288320
+        data = _make_xlsx_bytes({"Sheet1": pd.DataFrame({"Reference 1": ["8466D8E3DF09A99D", big], "TA": [1.0, 2.0]})})
+        df = load_tabular(uploaded_file=FakeUploadedFile(data, "cadency.xlsx"))
+        self.assertEqual(list(df["Reference 1"]), ["8466D8E3DF09A99D", str(big)])
+        self.assertEqual(list(df["TA"]), [1.0, 2.0])
+
+
 if __name__ == "__main__":
     unittest.main()

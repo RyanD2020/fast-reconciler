@@ -127,6 +127,13 @@ class TestMarkupShape(unittest.TestCase):
         self.assertIn("prefers-reduced-motion", css)
         self.assertEqual(css.count("{"), css.count("}"))
 
+    def test_sidebar_font_override_spares_nav_icons(self):
+        # Forcing the body font onto the icon-font spans printed "dashboard",
+        # "fact_check"... over the sidebar page titles (2026-10-27).
+        css = brand_css()
+        self.assertNotIn('[data-testid="stSidebarNav"] * { color: var(--nyl-white) !important; font-family', css)
+        self.assertIn('[data-testid="stSidebarNav"] *:not([data-testid="stIconMaterial"]) { font-family', css)
+
 
 if __name__ == "__main__":
     unittest.main()
