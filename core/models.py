@@ -26,6 +26,7 @@ class DailyResult:
     source_b_label: str  # e.g. "Cadency"
     source_b_total: float
     status: ReconStatus
+    note: str = ""  # why a difference is expected, when the inputs themselves explain it
     difference: float = field(init=False)
 
     def __post_init__(self):
@@ -33,8 +34,9 @@ class DailyResult:
 
 
 def daily_results_to_dataframe(daily_results: list[DailyResult]) -> pd.DataFrame:
-    """Shared rendering for any list of DailyResult, regardless of phase."""
-    return pd.DataFrame(
+    """Shared rendering for any list of DailyResult, regardless of phase.
+    The Note column only appears when at least one result carries a note."""
+    df = pd.DataFrame(
         [
             {
                 "Date": r.recon_date,
@@ -43,10 +45,14 @@ def daily_results_to_dataframe(daily_results: list[DailyResult]) -> pd.DataFrame
                 r.source_b_label: r.source_b_total,
                 "Difference": r.difference,
                 "Status": r.status.value,
+                "Note": r.note,
             }
             for r in daily_results
         ]
     )
+    if df.empty or not df["Note"].astype(bool).any():
+        df = df.drop(columns="Note", errors="ignore")
+    return df
 
 
 @dataclass

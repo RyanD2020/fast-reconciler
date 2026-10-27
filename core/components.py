@@ -303,7 +303,7 @@ def _tooltip(r: DailyResult) -> str:
     return (
         f"{r.recon_date:%a} {short_date(r.recon_date)} · {r.status.value} · "
         f"{r.source_a_label} {money(r.source_a_total)} · {r.source_b_label} {money(r.source_b_total)} · "
-        f"difference {money(r.difference)}"
+        f"difference {money(r.difference)}" + (f" · {r.note}" if r.note else "")
     )
 
 

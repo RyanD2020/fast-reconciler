@@ -56,6 +56,34 @@ class TestPhase2Matching(unittest.TestCase):
         day = result.daily_results[0]
         self.assertEqual(day.status, ReconStatus.DOES_NOT_RECONCILE)
         self.assertEqual(day.difference, -50.0)
+        # Both files cover the day, so nothing explains it: a genuine break.
+        self.assertEqual(day.note, "")
+        self.assertNotIn("Note", result.as_dataframe().columns)
+
+    def test_466_coverage_gaps_are_noted_not_reconciled(self):
+        # 9/1 test data: EFTs posted 9/1 settle 9/3. The 9/1 bank -466 belongs
+        # to EFTs posted before 9/1 (not in the file), and the 9/3 Cadency
+        # side has no Treasury file loaded. Both stay DOES NOT RECONCILE,
+        # each with a note saying why.
+        cadency = pd.DataFrame(
+            {
+                "Reference 10": ["GDS"],
+                "Reference 9": ["5801"],
+                "Reference 7": ["E"],
+                "TA": [-5544.16],
+                "Post Date": [datetime(2026, 9, 1)],
+                "Effective Date": [datetime(2026, 9, 3)],
+            }
+        )
+        bank = pd.DataFrame({"Flow Code": ["-466"], "Date": [datetime(2026, 9, 1)], "Amount": [-13485.27]})
+        result = run_phase2(cadency, bank, self.account)
+        by_date = {r.recon_date.day: r for r in result.daily_results}
+
+        self.assertEqual(by_date[1].status, ReconStatus.DOES_NOT_RECONCILE)
+        self.assertIn("posts up to 2 days earlier", by_date[1].note)
+        self.assertEqual(by_date[3].status, ReconStatus.DOES_NOT_RECONCILE)
+        self.assertIn("Outside the Treasury file's dates", by_date[3].note)
+        self.assertIn("Note", result.as_dataframe().columns)
 
     def test_466_uses_effective_date_not_post_date(self):
         # Post Date 8/4, Effective Date 8/6 - bank activity settles 8/6.
@@ -180,6 +208,7 @@ class TestPhase2Matching(unittest.TestCase):
         self.assertEqual(day.population, "Phase 2 - +166")
         self.assertEqual(day.status, ReconStatus.DOES_NOT_RECONCILE)
         self.assertEqual(day.difference, -2279.83)
+        self.assertIn("legacy Account 187", day.note)
 
     def test_headerless_treasury_export_runs(self):
         cadency = pd.DataFrame(

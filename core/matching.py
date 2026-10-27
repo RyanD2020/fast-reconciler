@@ -11,9 +11,11 @@ onboard another account -- only core/config.py does.
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 import pandas as pd
 
-from .config import AccountConfig
+from .config import AccountConfig, FlowCodeRule
 from .models import DailyResult, Phase1Result, Phase2Result, ReconStatus
 from .schema import (
     normalize_bank_export,
@@ -121,6 +123,10 @@ def run_phase2(
     Bank qualifying rows: Flow Code column == rule.flow_code.
         (Date basis: whichever date column resolve_bank_columns finds.)
 
+    A day that doesn't reconcile gets a note when the inputs themselves
+    explain the difference -- see _phase2_note. The status is still judged
+    with zero tolerance; the note only says why.
+
     Uses the same correctly-signed Cadency amount column as Phase 1 ("TA" /
     "True Amount", not unsigned "Amount" -- see schema.py docstring item 3).
     No sign flip is applied here yet, unlike Phase 1: that flip was
@@ -144,6 +150,8 @@ def run_phase2(
 
     bank_df = bank_df.copy()
     bank_df["_date"] = pd.to_datetime(bank_df[bank_cols["date"]]).dt.date
+    cadency_post_range = _date_range(cadency_df["Post Date"])
+    bank_range = _date_range(bank_df["_date"])
 
     daily_results: list[DailyResult] = []
     cadency_detail_frames = []
@@ -160,6 +168,7 @@ def run_phase2(
         cadency_qualifying["Flow Code"] = rule.flow_code
         date_col = "Effective Date" if rule.use_effective_date else "Post Date"
         cadency_qualifying["_date"] = cadency_qualifying[date_col]
+        settlement_lag = _settlement_lag_days(cadency_qualifying) if rule.use_effective_date else 0
 
         bank_qualifying = bank_df[bank_df[bank_cols["flow_code"]] == rule.flow_code].copy()
         bank_qualifying["Flow Code"] = rule.flow_code
@@ -178,6 +187,9 @@ def run_phase2(
                 status = ReconStatus.RECONCILED
             else:
                 status = ReconStatus.DOES_NOT_RECONCILE
+            note = ""
+            if status != ReconStatus.RECONCILED:
+                note = _phase2_note(recon_date, rule, account, settlement_lag, cadency_post_range, bank_range)
             daily_results.append(
                 DailyResult(
                     recon_date=recon_date,
@@ -187,6 +199,7 @@ def run_phase2(
                     source_b_label="Cadency",
                     source_b_total=cadency_total,
                     status=status,
+                    note=note,
                 )
             )
 
@@ -204,6 +217,67 @@ def run_phase2(
         bank_detail=bank_detail,
         cadency_detail=cadency_detail,
     )
+
+
+def _date_range(dates: pd.Series) -> tuple[date, date] | None:
+    dates = dates.dropna()
+    return (dates.min(), dates.max()) if not dates.empty else None
+
+
+def _settlement_lag_days(cadency_qualifying: pd.DataFrame) -> int:
+    """Longest Post Date -> Effective Date gap among this flow code's rows,
+    in days -- how far back a day's settling activity can have been posted.
+    Measured from the file rather than configured, since no settlement
+    window has been confirmed (9/1 test data: EFTs posted 9/1 settle 9/3).
+    """
+    lag = (
+        pd.to_datetime(cadency_qualifying["Effective Date"]) - pd.to_datetime(cadency_qualifying["Post Date"])
+    ).dt.days.max()
+    return max(int(lag), 0) if pd.notna(lag) else 0
+
+
+def _phase2_note(
+    recon_date: date,
+    rule: FlowCodeRule,
+    account: AccountConfig,
+    settlement_lag: int,
+    cadency_post_range: tuple[date, date] | None,
+    bank_range: tuple[date, date] | None,
+) -> str:
+    """Why a Phase 2 day can't be expected to tie, when the inputs say so:
+    the day sits outside what one of the files covers, or it's a reclaim
+    code that needs Phase 3's legacy-account netting first. Returns "" when
+    nothing explains the difference -- that's a genuine break.
+    """
+    notes = []
+    if bank_range and not bank_range[0] <= recon_date <= bank_range[1]:
+        notes.append(f"Outside the Treasury file's dates ({_span(bank_range)}) - the bank side for this day wasn't loaded.")
+    elif cadency_post_range:
+        first_post = recon_date - timedelta(days=settlement_lag)
+        if first_post < cadency_post_range[0] or recon_date > cadency_post_range[1]:
+            if settlement_lag:
+                notes.append(
+                    f"Effective Date basis: activity settling this day posts up to {settlement_lag} days earlier, "
+                    f"but the Cadency file only covers post dates {_span(cadency_post_range)}."
+                )
+            else:
+                notes.append(
+                    f"Outside the Cadency file's post dates ({_span(cadency_post_range)}) - "
+                    "the Cadency side for this day wasn't loaded."
+                )
+    if rule.phase == 3:
+        legacy = (
+            account.legacy_account_187
+            if account.reclaim_credit_trans_type in rule.cadency_trans_type_codes
+            else account.legacy_account_147
+        )
+        notes.append(f"Reclaim - judged before Phase 3 nets it against legacy Account {legacy}; a difference is expected until then.")
+    return " ".join(notes)
+
+
+def _span(dates: tuple[date, date]) -> str:
+    first, last = dates
+    return f"{first:%m/%d/%Y}" if first == last else f"{first:%m/%d/%Y} - {last:%m/%d/%Y}"
 
 
 # ---------------------------------------------------------------------------
