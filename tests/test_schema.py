@@ -11,10 +11,13 @@ produced $0 for every SAP row instead of raising.
 from __future__ import annotations
 
 import unittest
+from datetime import datetime
 
 import pandas as pd
 
 from core.schema import (
+    normalize_bank_export,
+    normalize_code,
     resolve_bank_columns,
     resolve_cadency_amount_column,
     resolve_sap_columns,
@@ -86,6 +89,47 @@ class TestResolveBankColumns(unittest.TestCase):
         self.assertEqual(cols["flow_code"], "Flow Code")
         self.assertEqual(cols["date"], "Date")
         self.assertEqual(cols["amount"], "Amount")
+
+
+class TestNormalizeBankExport(unittest.TestCase):
+    """The real Treasury export (9.1 Treasury.xlsx) has no header row --
+    read with one, the first transaction becomes the column names and
+    Phase 2 failed with "Could not find the Bank Flow Code column"."""
+
+    def _as_read_with_header(self):
+        # Exactly what pd.read_excel(header=0) hands back for the 9.1 file:
+        # row 1 promoted to column labels, footer total row at the bottom.
+        return pd.DataFrame(
+            [
+                [datetime(2026, 9, 1), "CL790", "0019803075", -58430.66, "-GDSCK_I", None, None],
+                [datetime(2026, 9, 1), "JPMC1009", "0019803075", 9352.75, "+166", None, "not match"],
+                [datetime(2026, 9, 1), "0019803075", None, -43867.55, 3, None, None],
+            ],
+            columns=[datetime(2026, 9, 1), "CL790", "0019803075", 5210.36, "+GDSCK_S", "Unnamed: 5", "Unnamed: 6"],
+        )
+
+    def test_headerless_export_keeps_first_row_and_drops_footer(self):
+        df = normalize_bank_export(self._as_read_with_header())
+        self.assertEqual(list(df["Flow Code"]), ["+GDSCK_S", "-GDSCK_I", "+166"])
+        self.assertEqual(list(df["Amount"]), [5210.36, -58430.66, 9352.75])
+        self.assertEqual(list(df["Account"]), ["19803075"] * 3)
+        cols = resolve_bank_columns(df)
+        self.assertEqual((cols["flow_code"], cols["date"], cols["amount"]), ("Flow Code", "Date", "Amount"))
+
+    def test_headered_export_passes_through_unchanged(self):
+        bank_df = pd.DataFrame({"Flow Code": ["+301"], "Date": [datetime(2026, 8, 3)], "Amount": [500.0]})
+        self.assertIs(normalize_bank_export(bank_df), bank_df)
+
+    def test_unrecognised_layout_still_raises_the_normal_error(self):
+        bank_df = pd.DataFrame(columns=["Something", "Else"])
+        with self.assertRaises(ValueError):
+            resolve_bank_columns(normalize_bank_export(bank_df))
+
+
+class TestNormalizeCode(unittest.TestCase):
+    def test_int_float_and_string_codes_all_match(self):
+        codes = normalize_code(pd.Series([5801, 5801.0, " 5801 ", "DEDU", None], dtype=object))
+        self.assertEqual(list(codes), ["5801", "5801", "5801", "DEDU", ""])
 
 
 if __name__ == "__main__":

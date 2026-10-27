@@ -12,7 +12,13 @@ import pandas as pd
 
 from .config import AccountConfig
 from .models import DailyResult, Phase1Result, Phase2Result, ReconStatus
-from .schema import resolve_bank_columns, resolve_cadency_amount_column, resolve_sap_columns, resolve_trans_type_column
+from .schema import (
+    normalize_bank_export,
+    resolve_bank_columns,
+    resolve_cadency_amount_column,
+    resolve_sap_columns,
+    resolve_trans_type_column,
+)
 
 
 @dataclass(frozen=True)
@@ -94,14 +100,19 @@ def phase1_run_facts(
 def phase2_run_facts(
     cadency_df: pd.DataFrame, bank_df: pd.DataFrame, account: AccountConfig, result: Phase2Result
 ) -> list[tuple[str, str]]:
+    bank_df = normalize_bank_export(bank_df)
     bank_cols = resolve_bank_columns(bank_df)
-    active_rules = [r for r in account.flow_code_rules if r.phase == 2]
+    active_rules = account.flow_code_rules
     return [
         ("Cadency trans-type column", resolve_trans_type_column(cadency_df)),
         ("Cadency amount column", _amount_label(cadency_df)),
         ("Sign convention", "As exported (Phase 2 sign relationship not yet confirmed)"),
         ("Bank columns", f"{bank_cols['flow_code']} / {bank_cols['date']} / {bank_cols['amount']}"),
-        ("Flow codes configured", f"{len(active_rules)} ({sum(r.manual_review for r in active_rules)} manual review)"),
+        (
+            "Flow codes configured",
+            f"{len(active_rules)} ({sum(r.manual_review for r in active_rules)} manual review, "
+            f"{sum(r.phase == 3 for r in active_rules)} reclaim - judged before Phase 3 netting)",
+        ),
         ("Cadency rows", _rows(cadency_df, result.cadency_detail)),
         ("Bank rows", _rows(bank_df, result.bank_detail)),
     ]
