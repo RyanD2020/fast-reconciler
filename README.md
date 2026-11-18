@@ -11,8 +11,8 @@ app is exploratory/fallback work, not (yet) the agreed deliverable — see
 the CODA meeting notes' "Recommended Direction" section.
 
 **This is a shell, not a finished tool** — Phase 1 and Phase 2 are real and
-tested; Phase 3 is still a stubbed page that shows the config already
-captured for it.
+tested; Phase 3 is built and tested for reclaim credits (+166), with reclaim
+debits (-468) still waiting on test data.
 
 ## What's built vs. stubbed
 
@@ -20,7 +20,8 @@ captured for it.
 |---|---|---|
 | Phase 1 — FAST vs. SAP | **Built & tested** | Aggregate, exact-match, daily. See `core/matching.py::run_phase1`. |
 | Phase 2 — Treasury Flow Codes | **Built & tested** | Each Flow Code reconciles independently, daily, against its own Cadency population, incl. the -466 effective-date exception and -495/+195 manual review. See `core/matching.py::run_phase2`. |
-| Phase 3 — Reclaim netting (Accts 187/147) | Stub | Page shows the legacy account mapping already defined in config; no netting logic yet. |
+| Phase 3 — Reclaim credits (+166, Acct 187) | **Built & tested** | Cadency RCCR reclaims net of DCU's splits to other accounts, matched daily to bank +166, with timing research that isolates what's left to look into. See `core/matching.py::run_phase3` and [Phase 3](#phase-3--reclaim-credits-net-of-dcu-splits). |
+| Phase 3 — Reclaim debits (-468, Acct 147) | Not started | No test data yet. |
 
 ## Project layout
 
@@ -32,13 +33,14 @@ views/
   overview.py                   Landing page: live status of each phase this session, how it works, credits
   phase1.py                     Phase 1 - FAST vs. SAP
   phase2.py                     Phase 2 - Treasury / bank Flow Codes
-  phase3.py                     Phase 3 - reclaim netting (not built yet: captured rules + roadmap)
+  phase3.py                     Phase 3 - reclaim credits net of DCU splits, with timing research
 core/
   config.py                     AccountConfig / FlowCodeRule registry — the reuse layer (see below)
   schema.py                     Column-name resolution, incl. one still-open assumption (see below)
   io_utils.py                   Loads a source from either an upload or a Databricks Volume path; lists sheet names for the picker
-  matching.py                   run_phase1 / run_phase2 (built); run_phase3 (stub)
-  models.py                     DailyResult / Phase1Result / Phase2Result dataclasses
+  matching.py                   run_phase1 / run_phase2 / run_phase3 (incl. DCU split matching)
+  timing.py                     Phase 3 timing research: which bank lines pay for which Cadency day (pure Python)
+  models.py                     DailyResult / Phase1Result / Phase2Result / Phase3Result dataclasses
   export.py                     Excel export -- see "Excel export" below
   insights.py                   Run summaries behind the verdict, KPI tiles and "Run details" (Streamlit-free)
   brand.py                      NYL colors, fonts, status glyphs, credits -- single source of truth
@@ -48,6 +50,8 @@ core/
 tests/
   test_phase1_matching.py       Unit tests for run_phase1 (stdlib unittest, no extra deps)
   test_phase2_matching.py       Unit tests for run_phase2, incl. -466/-GDSCK_* Reference 7 split and manual review
+  test_phase3_matching.py       Unit tests for run_phase3: DCU splits, ignored accounts, a whole synthetic month
+  test_timing.py                Unit tests for the timing research (same-day, next-day, runs, set-aside, unclaimed)
   test_export.py                Unit tests for export_workbook (sheet names, content, status color-fill)
   test_io_utils.py              Unit tests for list_sheet_names / load_tabular (multi-sheet workbook handling)
   test_schema.py                Unit tests for column resolution (real SAP layout, TA vs. Amount priority)
@@ -58,6 +62,9 @@ sample_data/
   sample_sap_export.csv         Synthetic data — includes one intentional mismatch day
   sample_bank_export.csv        Synthetic data — includes one intentional $10 mismatch (+GDSCK_S)
   sample_multi_sheet_workbook.xlsx  Synthetic data — same Cadency/SAP rows, split into two named tabs ("Cadency match to SAP" / "SAP Match to Cadency") to test the sheet picker
+  sample_phase3_cadency_reclaims.csv  Synthetic data — RCCR reclaims (plus one non-reclaim row to be filtered out)
+  sample_phase3_bank_export.csv       Synthetic data — headerless Treasury layout, +166 lines, one +301 line and a footer row
+  sample_phase3_dcu_reclaims.csv      Synthetic data — one DCU split for 19803075, one for another account (ignored)
 ```
 
 ## Running locally
@@ -80,6 +87,81 @@ upload `sample_cadency_export.csv` and `sample_bank_export.csv`. You should
 see six `RECONCILED` Flow Codes, one `DOES NOT RECONCILE` Flow Code
 (`+GDSCK_S`, off by $10 — intentional), and `-495`/`+195` both flagged
 `MANUAL REVIEW` regardless of whether the amounts happen to match.
+
+For Phase 3, open **Phase 3 · Reclaims** and load the three
+`sample_phase3_*.csv` files (Cadency, Treasury, DCU). You should see
+**2 items to research** that fully explain the month's $161.12 difference:
+a $88.88 reclaim on 9/3 with no bank receipt, and a $250.00 bank line on
+9/10 with no reclaim behind it. 9/1 and 9/8–9/9 tie once timing is counted;
+the $300.00 DCU split comes off the 9/1 reclaim; the 19803095 DCU row is
+ignored.
+
+## Phase 3 — reclaim credits net of DCU splits
+
+From Sean's email of 2026-11-18 and his `Phase 3 Test Data.xlsx` (three
+tabs: September RCCR items from Cadency, the +166 bank lines, and DCU's
+reclaims sheet). When reclaim funds are split between accounts, Cadency
+books the **full** reclaim to 19803075 and the other account's share
+(Account 187) is moved at month end, so Cadency can carry more than this
+account's bank ever receives. DCU's sheet says how much of which reclaim
+went elsewhere.
+
+1. **Cadency side** — Reference 10 = FAST, Reference 9 = RCCR, full signed
+   amount (`TA` / `True Amount`), by Post Date. A full Cadency export works
+   too; everything else is filtered out.
+2. **DCU splits** — each DCU row for **this** account (the `Acct#` column)
+   is matched to one reclaim on Certificate Number = Cadency **Reference 4**,
+   confirmed by Contract Number = the digits of **Reference 2** (`GA01234` ↔
+   1234), and subtracted from it. Rows for other accounts (e.g. 19803095)
+   are ignored, per Sean. A row is *not* applied, and is listed as an item
+   to research, if it can't be matched safely: no matching reclaim,
+   certificate matches but contract doesn't, more than one candidate, or a
+   split bigger than the reclaim.
+3. **Daily compare** — bank +166 vs. Cadency net of DCU, per day, zero
+   tolerance, same as Phases 1 and 2.
+4. **Timing research** (`core/timing.py`) — the bank receives reclaims in
+   batches that land a day either side of the Cadency post date, so most
+   days don't tie on their own. For each day the tool looks for the exact
+   combination of bank lines, within one activity day either side, that
+   ties to the cent; then tries neighbouring days together; then checks
+   whether the day ties once a single reclaim is set aside. What's left
+   is reported as items to research. This never changes a day's status;
+   it writes the day's note and the **Items to research** list.
+
+The page leads with a verdict on the items to research and a step-by-step
+bridge: Cadency full amount → less DCU splits → expected → bank →
+difference → itemised → still unexplained.
+
+**Against Sean's September 2026 test data** (real data — not in the repo,
+and no figures from it are quoted here): a strict daily compare
+reconciles 1 of 16 days. Once DCU's two splits for this account are
+applied and timing is counted, 11 of the 14 Cadency days tie exactly, and
+the month's whole difference comes down to three items — the same three
+Sean had annotated in the bank tab by hand (two "suppression" reclaims
+with no bank receipt, and one bank line with no reclaim behind it).
+Nothing is left unexplained.
+
+**Still to confirm for Phase 3:**
+
+- **DCU match key.** Reference 4 = certificate and Reference 2 = "GA" +
+  contract number holds for both DCU rows in the test data, but it was
+  read from the data, not confirmed.
+- **Timing window.** One activity day either side fits all of the
+  September data. Confirm that's acceptable (and whether a longer lag
+  should ever count as timing). Set per account in
+  `AccountConfig.phase3_timing_window_days`.
+- **"Suppression".** Sean's notes mark the two reclaims without a bank
+  receipt as suppressions. If suppressions are known up front (a list or
+  a flag), they could be an input and drop out of the research list.
+- **DCU `Acct#` = 147.** The header lists 147 as a possible value. Today
+  any account other than this one is ignored; confirm what a 147 row
+  means for the credit side.
+- **Sean's example arithmetic.** The worked example in his email has a
+  subtraction slip; the correctly subtracted figure is the one that ties
+  to the bank.
+- **Reclaim debits (-468 / RCDB / Account 147)** need their own test data.
+
+`demo.html` (the static browser mockup) has not been updated for Phase 3.
 
 ## Loading multi-sheet workbooks
 
@@ -260,13 +342,12 @@ sub-codes like 5802–5905, `core/config.py`'s exact-match Phase 1 code list
 would silently under-count the Cadency side. **Confirm with Sean before
 trusting Phase 1 against a full month of real data.**
 
-**2. The actual Treasury/bank export layout.** No real bank/treasury
-statement file has been provided yet — `core/schema.py`'s
-`Flow Code` / `Date` / `Amount` column names are a working assumption
-inferred from Sean's July 2026 manual working file, not a raw export.
-Given the SAP amount-column miss above, don't assume this one is right
-either — confirm against a real export before Phase 2 is trusted in
-production.
+**2. The actual Treasury/bank export layout — resolved (2026-10-27, 2026-11-18).**
+The real export is headerless (Date / Bank ID / Account / Amount / Flow
+Code, then a footer row); see `core/schema.py` item 4. Sean's Phase 3 bank
+tab added two variants, both handled: a blank first row, and a code
+column where every value is "+166" (pandas reads that as the number 166).
+Before this, that tab failed to load in Phase 2 as well.
 
 ## Other things still open per the meeting notes / business docs (not shell-blocking, but worth tracking)
 
@@ -275,8 +356,9 @@ production.
   (validates Cadency's monthly balance vs. SAP's monthly Trial Balance,
   after legacy-account activity). Its methodology is marked TBD and it
   isn't represented anywhere in this shell yet (no Phase 4 / monthly page).
-- **Account 187 trigger condition** — it's a conditional input, not a daily
-  one, but *when* it's required still isn't documented.
+- **Account 187 trigger condition** — answered by Sean (2026-11-18): Account
+  187 comes in when reclaim funds are split between accounts, and DCU's
+  reclaims sheet is the notification. Phase 3 consumes that sheet.
 - **Account 147's existing reconciliation** — `Acct 147 Rec January 2024.xlsx`
   shows Account 147 already has its own large, separate, mature daily
   reconciliation (SAP account 19801750, ~800-code Flow Code dictionary).

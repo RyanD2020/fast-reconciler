@@ -11,15 +11,29 @@ import re
 import unittest
 from datetime import date
 
+import pandas as pd
+
 from core import components as c
 from core.config import get_account
 from core.insights import summarize
-from core.models import DailyResult, ReconStatus
+from core.models import FINDING_NO_BANK_RECEIPT, FINDING_TIMING, DailyResult, Phase3Finding, Phase3Result, ReconStatus
 from core.theme import brand_css
 
 
 def _r(day: int, diff: float, status: ReconStatus, population: str = "Phase 1 - FAST vs SAP") -> DailyResult:
     return DailyResult(date(2026, 8, day), population, "SAP", 100.0 + diff, "Cadency", 100.0, status)
+
+
+def _p3(findings=(), bank=100.0, expected=100.0, full=100.0, days=1) -> Phase3Result:
+    results = [
+        DailyResult(date(2026, 9, d + 1), "Phase 3 - +166", "Bank", bank, "Cadency net of DCU", expected, ReconStatus.RECONCILED)
+        for d in range(days)
+    ]
+    dcu = pd.DataFrame({"Status": ["Applied", "Ignored - account 19803095"]})
+    return Phase3Result(
+        "19803075", "+166", results, pd.DataFrame(), pd.DataFrame(), dcu, list(findings), full, expected, bank,
+        days_same_day=days, days_timing=0, days_with_exceptions=0,
+    )
 
 
 def _first_tag(markup: str) -> str:
@@ -104,6 +118,39 @@ class TestVisuals(unittest.TestCase):
         self.assertIn("repeat(1, 28px)", html)
 
 
+class TestPhase3(unittest.TestCase):
+    def test_all_accounted_for(self):
+        html = c.phase3_verdict(_p3(findings=[Phase3Finding(FINDING_TIMING, date(2026, 9, 1), date(2026, 9, 1), 0.0, "t")]))
+        self.assertIn("every reclaim is accounted for", html)
+        self.assertIn("is-ok", html)
+
+    def test_items_to_research_name_the_explained_amount(self):
+        missing = Phase3Finding(FINDING_NO_BANK_RECEIPT, date(2026, 9, 8), date(2026, 9, 8), -512.34, "m")
+        html = c.phase3_verdict(_p3(findings=[missing], bank=100.0 - 512.34))
+        self.assertIn("1 item to research", html)
+        self.assertIn("nothing left unexplained", html)
+        self.assertIn("-&#36;512.34", html)
+
+    def test_unexplained_remainder_is_called_out(self):
+        html = c.phase3_verdict(_p3(bank=110.0))
+        self.assertIn("&#36;10.00 still unexplained", html)
+        self.assertIn("0 items to research", html)
+
+    def test_no_activity(self):
+        self.assertIn("No reclaim activity", c.phase3_verdict(_p3(days=0)))
+
+    def test_kpis_count_dcu_rows_for_this_account_only(self):
+        dcu_tile = next(k for k in c.phase3_kpis(_p3()) if k.label == "DCU splits applied")
+        self.assertEqual((dcu_tile.value, dcu_tile.suffix), ("1", "/1"))
+        self.assertIn("1 other-account row ignored", dcu_tile.sub)
+
+    def test_bridge_shows_the_month_arithmetic(self):
+        html = c.bridge(_p3(full=1000.00, expected=750.00, bank=750.00), "19803075")
+        self.assertIn("Less DCU splits to other accounts", html)
+        self.assertIn("-&#36;250.00", html)
+        self.assertIn("Expected in 19803075", html)
+
+
 class TestMarkupShape(unittest.TestCase):
     def test_components_open_with_a_block_tag(self):
         # Markdown only passes a line through as raw HTML when it opens with
@@ -113,6 +160,7 @@ class TestMarkupShape(unittest.TestCase):
             c.hero("t", "e", "l", ["m"]), c.chips([("k", "v")]), c.step("01", "t"), c.source_header("A", "t"),
             c.loaded(1, 1, None), c.callout("x"), c.verdict(s, "day"), c.kpis([c.Kpi("l", "v")]),
             c.footer(), c.profile_card(), c.credit_banner(), c.how_it_works(), c.roadmap([(None, "t", "d")]),
+            c.phase3_verdict(_p3()), c.bridge(_p3(), "19803075"),
         ):
             self.assertEqual(_first_tag(markup), "div")
 

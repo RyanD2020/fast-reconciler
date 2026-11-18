@@ -16,7 +16,7 @@ render(
             "Load the raw exports, let the documented rules route every row, and get an exact-match "
             "verdict for every day - with the workbook to prove it."
         ),
-        meta=[account.display_name, "Phase 1 live", "Phase 2 live", "Phase 3 in design"],
+        meta=[account.display_name, "Phase 1 live", "Phase 2 live", "Phase 3 credits live"],
     )
 )
 
@@ -33,6 +33,21 @@ def _status(state_key: str, noun: str) -> tuple[str | None, str]:
     return "DOES NOT RECONCILE", f"{s.not_reconciled} of {s.judged} {c.plural(s.judged, noun)} {'needs' if s.not_reconciled == 1 else 'need'} attention"
 
 
+def _phase3_status() -> tuple[str | None, str]:
+    """Phase 3 is judged on what's left to research, not day by day -- see
+    components.phase3_verdict."""
+    run = persisted("phase3_state", account.account_number)
+    if run is None:
+        return None, "Not run this session"
+    result = run["result"]
+    if not result.daily_results:
+        return None, "No reclaim activity"
+    n = len(result.exceptions)
+    if n == 0 and result.difference == 0:
+        return "RECONCILED", "Every reclaim accounted for"
+    return "DOES NOT RECONCILE", f"{n} {c.plural(n, 'item')} to research"
+
+
 render(c.step("01", "This session", "Where each phase stands for the selected account."))
 cards = [
     (
@@ -47,8 +62,8 @@ cards = [
     ),
     (
         "03", "Reclaim netting",
-        "RCCR / RCDB activity netted against legacy Accounts 187 and 147.",
-        None, "In design", "views/phase3.py", "Open Phase 3",
+        "Reclaim credits net of DCU's Account 187 splits, with timing research.",
+        *_phase3_status(), "views/phase3.py", "Open Phase 3",
     ),
 ]
 for column, (num, title, desc, status, label, page, link_label), delay in zip(st.columns(3, gap="medium"), cards, (0, 0.08, 0.16)):

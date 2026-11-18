@@ -8,10 +8,10 @@ another account -- e.g. PRT, PAR, or any of the ~20 accounts mentioned in the
 CODA meeting notes as the long-term goal -- means adding a new AccountConfig
 entry below, not rewriting matching logic.
 
-Phase 1 fields are fully used today by core/matching.py. Phase 2
-(flow_code_rules) and Phase 3 (legacy account fields) are captured now so the
-config shape won't need to change when those phases are built -- but the
-matching logic for them is still a stub. See core/matching.py.
+Phase 1 and Phase 2 fields are fully used by core/matching.py. Phase 3 uses
+the reclaim-credit fields (+166 / RCCR / Account 187); the reclaim-debit side
+(-468 / RCDB / Account 147) is captured but not built yet -- no test data for
+it so far. See core/matching.py::run_phase3.
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ class FlowCodeRule:
     Every rule is judged by core.matching.run_phase2, so every Flow Code
     on the bank statement gets a result. phase 3 rules (+166/-468 reclaim
     netting against legacy Accounts 187/147) are judged there directly,
-    without the netting -- they're expected NOT to reconcile until
-    run_phase3 (still a stub) nets them; Sean's 9/1 test data relies on
-    +166 surfacing as an exception rather than disappearing.
+    without the netting -- they're expected NOT to reconcile in Phase 2;
+    Sean's 9/1 test data relies on +166 surfacing as an exception rather
+    than disappearing. run_phase3 is where +166 is netted and researched.
 
     reference7_equals exists because GDS/5801 activity covers more than one
     Flow Code, each identified by its own Reference 7 tag (confirmed with
@@ -71,15 +71,24 @@ class AccountConfig:
     # need the same flip.
     phase1_cadency_sign_flip: bool = False
 
-    # --- Phase 2: Treasury / bank Flow Code matching (stub) ---
+    # --- Phase 2: Treasury / bank Flow Code matching ---
     gds_reference10_value: str = "GDS"
     flow_code_rules: tuple[FlowCodeRule, ...] = ()
 
-    # --- Phase 3: Reclaim Credit/Debit vs. legacy accounts (stub) ---
+    # --- Phase 3: Reclaim Credit/Debit vs. legacy accounts ---
     reclaim_credit_trans_type: str = "RCCR"
     reclaim_debit_trans_type: str = "RCDB"
-    legacy_account_187: str | None = "187"  # Reclaim Credit legacy account; conditional input per the CODA meeting notes
+    # Reclaim Credit legacy account. Per Sean (2026-11-18): when reclaim
+    # funds are split between accounts, Cadency books the full reclaim here
+    # and the other account's share is moved at month end; DCU's reclaims
+    # sheet says how much. That sheet is Phase 3's Account 187 input.
+    legacy_account_187: str | None = "187"
     legacy_account_147: str | None = "147"  # Reclaim Debit legacy account; conditional input per the CODA meeting notes
+    # How far a reclaim's bank receipt can sit from its Cadency post date, in
+    # activity days (any date with a Cadency post or a bank line, so weekends
+    # and holidays don't count). 1 fits all of Sean's September 2026 test
+    # data -- not a confirmed business rule. See core/timing.py.
+    phase3_timing_window_days: int = 1
 
 
 # Registry of configured accounts. Add a new AccountConfig(...) entry here to
@@ -106,7 +115,7 @@ ACCOUNTS: dict[str, AccountConfig] = {
             FlowCodeRule("+195", "FAST", ("INCO",), manual_review=True,
                          notes="Incoming wire - manual Ad Hoc SJE until FAST generates INCO transactions"),
             FlowCodeRule("+166", "FAST", ("RCCR",), phase=3,
-                         notes="Reclaim Credit - net against Account 187 before validating"),
+                         notes="Reclaim Credit - net of DCU's Account 187 splits before validating (Phase 3)"),
             FlowCodeRule("-468", "FAST", ("RCDB",), phase=3,
                          notes="Reclaim Debit - net against Account 147 before validating"),
         ),

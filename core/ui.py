@@ -20,6 +20,7 @@ from .brand import STATUS_COLORS
 from .config import ACCOUNTS, AccountConfig, get_account
 from .export import export_workbook
 from .io_utils import list_sheet_names, load_tabular
+from .schema import has_blank_header, normalize_bank_export
 from .theme import brand_css
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -122,6 +123,25 @@ def source_input(label: str, key: str, badge: str, hint: str = "") -> pd.DataFra
     with st.expander("Preview first 20 rows"):
         st.dataframe(df.head(20), use_container_width=True, hide_index=True)
     return df
+
+
+def bank_statement_input(label: str, key: str, badge: str, hint: str = "") -> pd.DataFrame | None:
+    """source_input for a Treasury / bank statement, put into named columns
+    (core/schema.py, item 4) with a note when the file had no header row."""
+    raw = source_input(label, key, badge, hint)
+    if raw is None:
+        return None
+    normalized = normalize_bank_export(raw)
+    if normalized is not raw:
+        rows_read = len(raw) + (0 if has_blank_header(raw) else 1)  # else the header row was a transaction
+        render(
+            components.callout(
+                f"No header row - read as Date / Bank ID / Account / Amount / Flow Code. "
+                f"{len(normalized):,} flow-code rows kept, {rows_read - len(normalized):,} other row(s) dropped.",
+                tone="info",
+            )
+        )
+    return normalized
 
 
 def persisted(state_key: str, account_number: str) -> Any | None:

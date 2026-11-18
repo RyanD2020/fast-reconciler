@@ -11,11 +11,12 @@ from datetime import date
 import pandas as pd
 
 from .config import AccountConfig
-from .models import DailyResult, Phase1Result, Phase2Result, ReconStatus
+from .models import DailyResult, Phase1Result, Phase2Result, Phase3Result, ReconStatus
 from .schema import (
     normalize_bank_export,
     resolve_bank_columns,
     resolve_cadency_amount_column,
+    resolve_dcu_columns,
     resolve_sap_columns,
     resolve_trans_type_column,
 )
@@ -62,7 +63,7 @@ def summarize(daily_results: list[DailyResult]) -> ReconSummary:
 
 
 def flow_code_of(result: DailyResult) -> str:
-    return result.population.removeprefix("Phase 2 - ")
+    return result.population.removeprefix("Phase 2 - ").removeprefix("Phase 3 - ")
 
 
 def _rows(loaded: pd.DataFrame, qualifying: pd.DataFrame) -> str:
@@ -115,4 +116,39 @@ def phase2_run_facts(
         ),
         ("Cadency rows", _rows(cadency_df, result.cadency_detail)),
         ("Bank rows", _rows(bank_df, result.bank_detail)),
+    ]
+
+
+def phase3_run_facts(
+    cadency_df: pd.DataFrame,
+    bank_df: pd.DataFrame,
+    dcu_df: pd.DataFrame,
+    account: AccountConfig,
+    result: Phase3Result,
+) -> list[tuple[str, str]]:
+    bank_df = normalize_bank_export(bank_df)
+    bank_cols = resolve_bank_columns(bank_df)
+    dcu_cols = resolve_dcu_columns(dcu_df)
+    dcu = result.dcu_status_counts()
+    window = account.phase3_timing_window_days
+    return [
+        ("Cadency trans-type column", resolve_trans_type_column(cadency_df)),
+        ("Cadency amount column", _amount_label(cadency_df)),
+        ("Reclaim population", f"Reference 10 = FAST, trans type {account.reclaim_credit_trans_type} -> bank flow code {result.flow_code}"),
+        ("Bank columns", f"{bank_cols['flow_code']} / {bank_cols['date']} / {bank_cols['amount']}"),
+        ("DCU columns", " / ".join(c for c in (dcu_cols["certificate"], dcu_cols["contract"], dcu_cols["account"], dcu_cols["amount"]) if c)),
+        (
+            "DCU match",
+            "Certificate Number = Cadency Reference 4"
+            + (", confirmed by Contract Number = Reference 2 digits" if dcu_cols["contract"] else " (no contract column to confirm)"),
+        ),
+        (
+            "DCU rows",
+            f"{len(result.dcu_detail):,} loaded: {dcu['applied']} applied, {dcu['ignored']} another account (ignored), "
+            f"{dcu['not_applied']} not applied",
+        ),
+        ("Timing window", f"{window} activity day{'s' if window != 1 else ''} either side of the post date, exact to the cent"),
+        ("Cadency rows", _rows(cadency_df, result.cadency_detail)),
+        ("Bank rows", _rows(bank_df, result.bank_detail)),
+        ("Tolerance", "None - exact match to the cent"),
     ]
