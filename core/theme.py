@@ -307,6 +307,13 @@ _COMPONENTS = """
 .nyl-legacy__link .nyl-matrix__code { font-size: 22px; }
 .nyl-legacy__arrow { font: 700 20px/1 var(--nyl-sans); color: var(--nyl-blue); }
 
+.nyl-bridge { margin-top: 14px; border-top: 1px solid var(--nyl-grey); }
+.nyl-bridge__row { display: flex; justify-content: space-between; gap: 24px; padding: 10px 0; border-bottom: 1px solid var(--nyl-grey); font: 14px/1.4 var(--nyl-sans); color: var(--nyl-dark); }
+.nyl-bridge__row span:last-child { font-family: var(--nyl-mono); white-space: nowrap; }
+.nyl-bridge__row.is-total { font-weight: 700; border-bottom: 2px solid var(--nyl-dark); }
+.nyl-bridge__row.is-ok, .nyl-bridge__row.is-bad { font-weight: 700; padding-left: 12px; border-left: 5px solid var(--nyl-green); }
+.nyl-bridge__row.is-bad { border-left-color: var(--nyl-dark); }
+
 .nyl-road { margin-top: 14px; }
 .nyl-road__item { display: flex; align-items: flex-start; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--nyl-grey); animation: nyl-rise .45s ease both; }
 .nyl-road__item:last-child { border-bottom: 0; }

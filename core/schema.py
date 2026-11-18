@@ -53,11 +53,35 @@ Column-name resolution for the raw source files.
    names the columns positionally, and drops anything whose Flow Code
    isn't a +/- code (the footer). Files that do carry a "Flow Code" header
    pass through unchanged.
+
+   Two more shapes of the same export, both from Sean's Phase 3 test
+   workbook (2026-11-18, the "Sept Reclaim bank Statements" tab):
+   * A blank first row. pandas makes that the header ("Unnamed: 0" ...
+     "Unnamed: 9"), so every transaction is already a data row and there's
+     nothing to put back.
+   * Every Flow Code numeric-looking ("+166" on every row). pandas converts
+     a column like that to numbers, so "+166" arrives as 166 and "-468" as
+     -468 -- the sign is lost on positive codes. flow_code_text gives it
+     back. The footer's row count sits in the same position, so a bare
+     number only counts as a code on a transaction row: one with a real
+     date and an Account (the footer has no Account). That also keeps an
+     unrelated all-number file from being read as a Treasury export.
+
+5. DCU RECLAIMS SHEET -- FROM SEAN'S PHASE 3 TEST DATA (2026-11-18)
+   DCU's notice of reclaims whose funds were split with another account.
+   One row per split: Contract Number, Certificate Number, Cycle Date,
+   Effective Date, Debit Account, an account column literally headed
+   "Acct# 19803075 or 19803095 or 147", Trans Type, "Total Amount (absolute
+   value only)" and IA Acct Notes. The account column is matched on its
+   "Acct#" prefix, so a different list of example accounts in the header
+   still resolves. See core.matching.run_phase3 for how the rows are used.
 """
 
 from __future__ import annotations
 
+import numbers
 import re
+from datetime import date
 
 import pandas as pd
 
@@ -75,9 +99,45 @@ BANK_AMOUNT_COLUMN_CANDIDATES = ["Amount", "Net Amount"]
 BANK_HEADERLESS_COLUMNS = ["Date", "Bank ID", "Account", "Amount", "Flow Code"]
 _FLOW_CODE_RE = re.compile(r"^[+-][A-Za-z0-9_]+$")
 
+DCU_CERTIFICATE_COLUMN_CANDIDATES = ["Certificate Number", "Certificate", "Cert Number"]
+DCU_CONTRACT_COLUMN_CANDIDATES = ["Contract Number", "Contract"]
+DCU_EFFECTIVE_DATE_COLUMN_CANDIDATES = ["Effective Date"]
+DCU_AMOUNT_COLUMN_CANDIDATES = ["Total Amount (absolute value only)", "Total Amount"]
+DCU_ACCOUNT_COLUMN_PREFIXES = ["Acct#", "Acct #"]
+
 
 def _is_flow_code(value) -> bool:
     return isinstance(value, str) and bool(_FLOW_CODE_RE.match(value.strip()))
+
+
+def _is_blank(value) -> bool:
+    if isinstance(value, str):
+        return not value.strip()
+    return value is None or bool(pd.isna(value))
+
+
+def _is_date(value) -> bool:
+    """A real date, or date text as a .csv hands it back."""
+    if isinstance(value, date):
+        return True
+    return isinstance(value, str) and pd.notna(pd.to_datetime(value, errors="coerce"))
+
+
+def flow_code_text(value) -> str | None:
+    """A Flow Code as "+166" / "-GDSCK_I" text, or None if it isn't one.
+    Numbers get their sign back (166 -> "+166") -- see module docstring,
+    item 4: pandas reads an all-numeric code column as numbers.
+    """
+    if isinstance(value, str):
+        return value.strip() if _is_flow_code(value) else None
+    if isinstance(value, numbers.Real) and not isinstance(value, bool) and not pd.isna(value) and float(value).is_integer():
+        return f"{int(value):+d}"
+    return None
+
+
+def has_blank_header(df: pd.DataFrame) -> bool:
+    """True when pandas built the header from an empty first row."""
+    return len(df.columns) > 0 and all(isinstance(c, str) and c.startswith("Unnamed:") for c in df.columns)
 
 
 def normalize_bank_export(bank_df: pd.DataFrame) -> pd.DataFrame:
@@ -89,14 +149,25 @@ def normalize_bank_export(bank_df: pd.DataFrame) -> pd.DataFrame:
     if any(c in bank_df.columns for c in BANK_FLOW_CODE_COLUMN_CANDIDATES):
         return bank_df
     n = len(BANK_HEADERLESS_COLUMNS)
-    if len(bank_df.columns) < n or not _is_flow_code(bank_df.columns[n - 1]):
+    if len(bank_df.columns) < n:
         return bank_df
 
-    first_row = [None if str(c).startswith("Unnamed:") else c for c in bank_df.columns]
-    df = pd.concat([pd.DataFrame([first_row], columns=bank_df.columns), bank_df], ignore_index=True)
+    if has_blank_header(bank_df):
+        df = bank_df.copy()
+    elif _is_flow_code(bank_df.columns[n - 1]):
+        first_row = [None if str(c).startswith("Unnamed:") else c for c in bank_df.columns]
+        df = pd.concat([pd.DataFrame([first_row], columns=bank_df.columns), bank_df], ignore_index=True)
+    else:
+        return bank_df
+
     df.columns = BANK_HEADERLESS_COLUMNS + [f"Column {i + 1}" for i in range(n, len(df.columns))]
-    df = df[df["Flow Code"].map(_is_flow_code)].reset_index(drop=True)
-    df["Flow Code"] = df["Flow Code"].str.strip()
+    df["Flow Code"] = [
+        flow_code_text(code) if isinstance(code, str) or (_is_date(day) and not _is_blank(account)) else None
+        for code, account, day in zip(df["Flow Code"], df["Account"], df["Date"])
+    ]
+    df = df[df["Flow Code"].notna()].reset_index(drop=True)
+    if df.empty:
+        return bank_df
     df["Amount"] = pd.to_numeric(df["Amount"])
     df["Account"] = normalize_code(df["Account"]).str.lstrip("0")
     return df
@@ -174,4 +245,41 @@ def resolve_bank_columns(bank_df: pd.DataFrame) -> dict:
         "flow_code": _resolve_column(bank_df, BANK_FLOW_CODE_COLUMN_CANDIDATES, "Bank Flow Code"),
         "date": _resolve_column(bank_df, BANK_DATE_COLUMN_CANDIDATES, "Bank Date"),
         "amount": _resolve_column(bank_df, BANK_AMOUNT_COLUMN_CANDIDATES, "Bank Amount"),
+    }
+
+
+def _resolve_optional_column(df: pd.DataFrame, candidates: list[str], what: str) -> str | None:
+    """Like _resolve_column, but None when the file simply doesn't have it."""
+    if not any(c in df.columns for c in candidates):
+        return None
+    return _resolve_column(df, candidates, what)
+
+
+def _resolve_prefixed_column(df: pd.DataFrame, prefixes: list[str], what: str) -> str:
+    present = [c for c in df.columns if isinstance(c, str) and c.strip().startswith(tuple(prefixes))]
+    if not present:
+        raise ValueError(
+            f"Could not find the {what} column in this file. "
+            f"Looked for a header starting with: {prefixes}. Columns present: {list(df.columns)}"
+        )
+    if len(present) > 1:
+        raise ValueError(
+            f"Found more than one candidate column for {what} ({present}) in "
+            "this file -- need a human to confirm which one is authoritative "
+            "before this can run safely."
+        )
+    return present[0]
+
+
+def resolve_dcu_columns(dcu_df: pd.DataFrame) -> dict:
+    """Return the DCU reclaims sheet's column names -- see module docstring,
+    item 5. 'contract' and 'effective_date' are None when absent: they only
+    confirm / disambiguate a match, the certificate alone can make one.
+    """
+    return {
+        "certificate": _resolve_column(dcu_df, DCU_CERTIFICATE_COLUMN_CANDIDATES, "DCU Certificate Number"),
+        "contract": _resolve_optional_column(dcu_df, DCU_CONTRACT_COLUMN_CANDIDATES, "DCU Contract Number"),
+        "effective_date": _resolve_optional_column(dcu_df, DCU_EFFECTIVE_DATE_COLUMN_CANDIDATES, "DCU Effective Date"),
+        "account": _resolve_prefixed_column(dcu_df, DCU_ACCOUNT_COLUMN_PREFIXES, "DCU account (Acct#)"),
+        "amount": _resolve_column(dcu_df, DCU_AMOUNT_COLUMN_CANDIDATES, "DCU Total Amount"),
     }

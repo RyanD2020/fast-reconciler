@@ -230,6 +230,24 @@ class TestPhase2Matching(unittest.TestCase):
         self.assertEqual(day.source_a_total, 430.12)
         self.assertEqual(day.status, ReconStatus.RECONCILED)
 
+    def test_numeric_flow_code_column_still_matches(self):
+        # A bank file holding only +166 lines comes back from pd.read_excel
+        # with the code as the number 166 -- it must still match "+166".
+        cadency = pd.DataFrame(
+            {
+                "Reference 10": ["FAST"],
+                "Reference 9": ["RCCR"],
+                "Reference 7": [""],
+                "TA": [250.00],
+                "Post Date": [datetime(2026, 9, 1)],
+                "Effective Date": [datetime(2026, 9, 1)],
+            }
+        )
+        bank = pd.DataFrame({"Flow Code": [166], "Date": [datetime(2026, 9, 1)], "Amount": [250.00]})
+        day = next(r for r in run_phase2(cadency, bank, self.account).daily_results if r.population == "Phase 2 - +166")
+        self.assertEqual(day.source_a_total, 250.00)
+        self.assertEqual(day.status, ReconStatus.RECONCILED)
+
     def test_each_flow_code_independent_one_failure_does_not_affect_others(self):
         cadency = pd.DataFrame(
             {

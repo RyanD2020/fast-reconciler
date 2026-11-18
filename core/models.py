@@ -75,3 +75,91 @@ class Phase2Result:
 
     def as_dataframe(self) -> pd.DataFrame:
         return daily_results_to_dataframe(self.daily_results)
+
+
+# Phase 3 research findings, by kind. Only TIMING is not an exception.
+FINDING_TIMING = "Timing"
+FINDING_NO_BANK_RECEIPT = "No bank receipt"
+FINDING_NOT_IN_CADENCY = "Bank line not in Cadency"
+FINDING_UNEXPLAINED = "Unexplained"
+FINDING_DCU_NOT_APPLIED = "DCU split not applied"
+# Findings whose amount is a known, itemised part of the month's difference.
+EXPLAINING_FINDINGS = (FINDING_NO_BANK_RECEIPT, FINDING_NOT_IN_CADENCY)
+
+
+@dataclass(frozen=True)
+class Phase3Finding:
+    """One line of Phase 3's research: a timing tie, or an item to look into."""
+
+    kind: str  # one of the FINDING_* constants
+    first_date: date
+    last_date: date
+    amount: float  # effect on Bank - Cadency; 0 where it doesn't move the difference (timing, DCU)
+    detail: str
+
+    @property
+    def is_exception(self) -> bool:
+        return self.kind != FINDING_TIMING
+
+
+@dataclass
+class Phase3Result:
+    account_number: str
+    flow_code: str  # e.g. "+166"
+    daily_results: list[DailyResult]  # one per date: bank vs. Cadency net of DCU splits, zero tolerance
+    cadency_detail: pd.DataFrame  # qualifying reclaims, with DCU Split / Expected in account / Bank Tie
+    bank_detail: pd.DataFrame  # qualifying bank lines, with Ties To
+    dcu_detail: pd.DataFrame  # every DCU row, with what was done with it
+    findings: list[Phase3Finding]
+    cadency_full_total: float  # reclaims at the full amount Cadency books
+    expected_total: float  # net of DCU splits -- what this account's bank should receive
+    bank_total: float
+    days_same_day: int  # Cadency post days that tie on their own day
+    days_timing: int  # ... that tie once bank lines from a neighbouring day count
+    days_with_exceptions: int  # ... that tie only with a reclaim set aside, or don't tie at all
+
+    @property
+    def dcu_split_total(self) -> float:
+        return round(self.cadency_full_total - self.expected_total, 2)
+
+    @property
+    def difference(self) -> float:
+        return round(self.bank_total - self.expected_total, 2)
+
+    @property
+    def exceptions(self) -> list[Phase3Finding]:
+        return [f for f in self.findings if f.is_exception]
+
+    @property
+    def explained(self) -> float:
+        return round(sum(f.amount for f in self.findings if f.kind in EXPLAINING_FINDINGS), 2)
+
+    @property
+    def unexplained(self) -> float:
+        return round(self.difference - self.explained, 2)
+
+    def dcu_status_counts(self) -> dict[str, int]:
+        """'applied' / 'ignored' (another account's row) / 'not_applied'."""
+        statuses = self.dcu_detail["Status"] if "Status" in self.dcu_detail else pd.Series(dtype=str)
+        applied = int((statuses == "Applied").sum())
+        ignored = int(statuses.str.startswith("Ignored").sum())
+        return {"applied": applied, "ignored": ignored, "not_applied": len(statuses) - applied - ignored}
+
+    def as_dataframe(self) -> pd.DataFrame:
+        return daily_results_to_dataframe(self.daily_results)
+
+    def findings_dataframe(self, exceptions: bool) -> pd.DataFrame:
+        rows = [f for f in self.findings if f.is_exception == exceptions]
+        return pd.DataFrame(
+            [
+                {
+                    "Finding": f.kind,
+                    "From": f.first_date,
+                    "To": f.last_date,
+                    "Effect on difference": f.amount,
+                    "Detail": f.detail,
+                }
+                for f in rows
+            ],
+            columns=["Finding", "From", "To", "Effect on difference", "Detail"],
+        )

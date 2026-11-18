@@ -16,10 +16,12 @@ from datetime import datetime
 import pandas as pd
 
 from core.schema import (
+    flow_code_text,
     normalize_bank_export,
     normalize_code,
     resolve_bank_columns,
     resolve_cadency_amount_column,
+    resolve_dcu_columns,
     resolve_sap_columns,
     resolve_trans_type_column,
 )
@@ -120,10 +122,75 @@ class TestNormalizeBankExport(unittest.TestCase):
         bank_df = pd.DataFrame({"Flow Code": ["+301"], "Date": [datetime(2026, 8, 3)], "Amount": [500.0]})
         self.assertIs(normalize_bank_export(bank_df), bank_df)
 
+    def test_blank_first_row_and_numeric_flow_codes(self):
+        # Sean's Phase 3 "Sept Reclaim bank Statements" tab (2026-11-18): row 1
+        # is empty, so pandas names the columns "Unnamed: n"; every code is
+        # "+166", so pandas reads the column as the number 166. Before this
+        # fix the file failed with "Could not find the Bank Flow Code column".
+        raw = pd.DataFrame(
+            [
+                [datetime(2026, 9, 1), "JPMC1009", 19803075, 1350.25, 166, None],
+                [datetime(2026, 9, 3), "JPMC1009", 19803075, 75.10, 166, "note"],
+                [datetime(2026, 9, 3), "0019803075", None, 1425.35, 2, None],  # footer: count, no account
+            ],
+            columns=[f"Unnamed: {i}" for i in range(6)],
+        )
+        df = normalize_bank_export(raw)
+        self.assertEqual(list(df["Flow Code"]), ["+166", "+166"])
+        self.assertEqual(list(df["Amount"]), [1350.25, 75.10])
+        self.assertEqual(list(df["Account"]), ["19803075"] * 2)
+        self.assertEqual(df["Column 6"].iloc[1], "note")
+
+    def test_blank_first_row_without_flow_codes_is_left_alone(self):
+        raw = pd.DataFrame([[1, 2, 3, 4, 5]], columns=[f"Unnamed: {i}" for i in range(5)])
+        self.assertIs(normalize_bank_export(raw), raw)
+
     def test_unrecognised_layout_still_raises_the_normal_error(self):
         bank_df = pd.DataFrame(columns=["Something", "Else"])
         with self.assertRaises(ValueError):
             resolve_bank_columns(normalize_bank_export(bank_df))
+
+
+class TestFlowCodeText(unittest.TestCase):
+    def test_codes_read_as_numbers_get_their_sign_back(self):
+        self.assertEqual(flow_code_text(166), "+166")
+        self.assertEqual(flow_code_text(166.0), "+166")
+        self.assertEqual(flow_code_text(-468), "-468")
+        self.assertEqual(flow_code_text(" +GDSCK_S "), "+GDSCK_S")
+
+    def test_non_codes(self):
+        for value in (None, float("nan"), "", "Total", 1.5, True):
+            self.assertIsNone(flow_code_text(value), value)
+
+
+class TestResolveDcuColumns(unittest.TestCase):
+    REAL_HEADER = [
+        "Contract Number", "Certificate Number", "Cycle Date", "Effective Date", "Debit Account",
+        "Acct# 19803075 or 19803095 or 147", "Trans Type", "Total Amount (absolute value only)", "IA Acct Notes",
+    ]
+
+    def test_resolves_the_real_dcu_sheet(self):
+        cols = resolve_dcu_columns(pd.DataFrame(columns=self.REAL_HEADER))
+        self.assertEqual(
+            cols,
+            {
+                "certificate": "Certificate Number",
+                "contract": "Contract Number",
+                "effective_date": "Effective Date",
+                "account": "Acct# 19803075 or 19803095 or 147",
+                "amount": "Total Amount (absolute value only)",
+            },
+        )
+
+    def test_account_column_matched_on_its_prefix(self):
+        cols = resolve_dcu_columns(pd.DataFrame(columns=["Certificate Number", "Acct# 19803075 or 187", "Total Amount"]))
+        self.assertEqual(cols["account"], "Acct# 19803075 or 187")
+        self.assertIsNone(cols["contract"])
+        self.assertIsNone(cols["effective_date"])
+
+    def test_missing_required_column_raises(self):
+        with self.assertRaisesRegex(ValueError, "Certificate"):
+            resolve_dcu_columns(pd.DataFrame(columns=["Acct#", "Total Amount"]))
 
 
 class TestNormalizeCode(unittest.TestCase):

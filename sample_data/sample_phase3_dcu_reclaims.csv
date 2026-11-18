@@ -1,0 +1,3 @@
+Contract Number,Certificate Number,Cycle Date,Effective Date,Debit Account,Acct# 19803075 or 19803095 or 147,Trans Type,Total Amount (absolute value only),IA Acct Notes
+90011,900000101,,2026-09-01,,19803075,,300.00,
+90099,900000999,,2026-09-02,,19803095,,120.00,Different account - ignored

@@ -24,7 +24,7 @@ from typing import Iterable
 from .brand import BUILT_BY, STATUS_CSS, STATUS_GLYPHS
 from .config import FlowCodeRule
 from .insights import ReconSummary, flow_code_of
-from .models import DailyResult, Phase1Result, Phase2Result
+from .models import DailyResult, Phase1Result, Phase2Result, Phase3Result
 
 
 def flatten(markup: str) -> str:
@@ -193,6 +193,11 @@ def verdict(summary: ReconSummary, noun: str, show_population: bool = False) -> 
         where = f"{flow_code_of(worst)} on {short_date(worst.recon_date)}" if show_population else short_date(worst.recon_date)
         detail = f"Largest gap: {where}, {money(worst.difference)} · {period} · net difference {net}"
 
+    return _verdict(tone, glyph, title, detail)
+
+
+def _verdict(tone: str, glyph: str, title: str, detail: str) -> str:
+    """glyph is trusted static markup; title and detail are escaped."""
     burst = '<div class="nyl-burst" aria-hidden="true">' + "<span></span>" * 8 + "</div>" if tone == "ok" else ""
     return f"""
     <div class="nyl-verdict is-{tone}" role="status">
@@ -287,6 +292,101 @@ def phase2_kpis(summary: ReconSummary, result: Phase2Result, configured_codes: i
         ),
         Kpi("Active flow codes", f"{active}", suffix=f"/{configured_codes}", sub=date_range(summary.first_date, summary.last_date)),
     ]
+
+
+
+def phase3_verdict(result: Phase3Result) -> str:
+    """Phase 3 is judged on what's left to research once DCU splits and
+    timing are accounted for -- the daily table keeps the zero-tolerance
+    day-by-day status, but most of those days are explained timing."""
+    dates = sorted(r.recon_date for r in result.daily_results)
+    period = date_range(dates[0], dates[-1]) if dates else ""
+    items = result.exceptions
+    diff = money(result.difference)
+
+    if not result.daily_results:
+        return _verdict(
+            "info", "i", "No reclaim activity in these files.",
+            "No RCCR reclaims in the Cadency file and no +166 lines in the Treasury file - check the sheets selected.",
+        )
+    if not items and result.difference == 0:
+        return _verdict(
+            "ok", "&#10003;", "Reconciled - every reclaim is accounted for.",
+            f"{result.days_same_day} {plural(result.days_same_day, 'day')} tie the same day, "
+            f"{result.days_timing} after timing · {period} · month difference {diff}",
+        )
+    left = (
+        "nothing left unexplained" if result.unexplained == 0 else f"{money(result.unexplained)} still unexplained"
+    )
+    return _verdict(
+        "bad", "!", f"Attention needed - {len(items)} {plural(len(items), 'item')} to research.",
+        f"Month difference {diff} · {money(result.explained)} explained by the items below · {left} · {period}",
+    )
+
+
+def phase3_kpis(result: Phase3Result) -> list[Kpi]:
+    items = result.exceptions
+    days = result.days_same_day + result.days_timing + result.days_with_exceptions
+    dcu = result.dcu_status_counts()
+    for_account = dcu["applied"] + dcu["not_applied"]
+    dcu_sub = f"{money(result.dcu_split_total)} split out"
+    if dcu["ignored"]:
+        dcu_sub += f" · {dcu['ignored']} other-account {plural(dcu['ignored'], 'row')} ignored"
+    return [
+        Kpi(
+            "Items to research",
+            f"{len(items)}",
+            sub="After DCU splits and timing" if items else "Nothing left to research",
+            tone="bad" if items else "ok",
+        ),
+        Kpi(
+            "Month difference",
+            money(result.difference),
+            sub="Bank vs. Cadency net of DCU"
+            if result.difference == 0
+            else ("Fully itemised below" if result.unexplained == 0 else f"{money(result.unexplained)} unexplained"),
+            tone="ok" if result.difference == 0 else ("neutral" if result.unexplained == 0 else "bad"),
+        ),
+        Kpi(
+            "Cadency days tied",
+            f"{result.days_same_day + result.days_timing}",
+            suffix=f"/{days}",
+            sub=f"{result.days_same_day} same day · {result.days_timing} after timing",
+            tone="ok" if days and not result.days_with_exceptions else "neutral",
+        ),
+        Kpi(
+            "DCU splits applied",
+            f"{dcu['applied']}",
+            suffix=f"/{for_account}",
+            sub=dcu_sub,
+            tone="bad" if dcu["not_applied"] else "neutral",
+        ),
+    ]
+
+
+def bridge(result: Phase3Result, account_number: str) -> str:
+    """Cadency's full reclaims down to the bank, one line at a time -- the
+    month's arithmetic, so the verdict's numbers can be checked by eye."""
+    rows = [
+        ("Cadency reclaim credits, full amount", result.cadency_full_total, ""),
+        ("Less DCU splits to other accounts", -result.dcu_split_total, ""),
+        (f"Expected in {account_number}", result.expected_total, "is-total"),
+        (f"Bank {result.flow_code} receipts", result.bank_total, ""),
+        ("Difference (bank - expected)", result.difference, "is-total"),
+        ("Itemised in the research below", result.explained, ""),
+        ("Still unexplained", result.unexplained, "is-ok" if result.unexplained == 0 else "is-bad"),
+    ]
+    body = "".join(
+        f'<div class="nyl-bridge__row {cls}"><span>{esc(label)}</span><span>{esc(money(value))}</span></div>'
+        for label, value, cls in rows
+    )
+    return f"""
+    <div class="nyl-panel">
+      <div class="nyl-eyebrow">The month, step by step</div>
+      <div class="nyl-panel__title">From Cadency's full reclaims to the bank</div>
+      <div class="nyl-bridge">{body}</div>
+    </div>
+    """
 
 
 def legend() -> str:

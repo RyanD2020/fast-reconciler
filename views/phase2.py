@@ -6,8 +6,8 @@ import streamlit as st
 from core import components as c
 from core.insights import phase2_run_facts, summarize
 from core.matching import run_phase2
-from core.schema import normalize_bank_export
 from core.ui import (
+    bank_statement_input,
     current_account,
     render,
     render_results_table,
@@ -47,18 +47,7 @@ left, right = st.columns(2, gap="large")
 with left:
     cadency_df = source_input("Cadency export", "phase2_cadency", "A", "FAST and GDS activity - the rules route each row to its flow code.")
 with right:
-    bank_df = source_input("Treasury / bank statement", "phase2_bank", "B", "One row per flow-code movement.")
-    if bank_df is not None:
-        normalized = normalize_bank_export(bank_df)
-        if normalized is not bank_df:
-            render(
-                c.callout(
-                    f"No header row - read as Date / Bank ID / Account / Amount / Flow Code. "
-                    f"{len(normalized):,} flow-code rows kept, {len(bank_df) + 1 - len(normalized):,} total row(s) dropped.",
-                    tone="info",
-                )
-            )
-        bank_df = normalized
+    bank_df = bank_statement_input("Treasury / bank statement", "phase2_bank", "B", "One row per flow-code movement.")
 
 render(c.step("02", "Reconcile", "Each flow code, each day, judged independently."))
 ready = cadency_df is not None and bank_df is not None
